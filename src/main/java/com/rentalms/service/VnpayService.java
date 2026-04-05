@@ -65,8 +65,8 @@ public class VnpayService {
 
         // Format thoi gian theo GMT+7
         SimpleDateFormat fmt = new SimpleDateFormat("yyyyMMddHHmmss");
-        fmt.setTimeZone(TimeZone.getTimeZone("Etc/GMT+7"));
-        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("Etc/GMT+7"));
+        fmt.setTimeZone(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
         String createDate = fmt.format(cal.getTime());
         cal.add(Calendar.MINUTE, 15); // het han sau 15 phut
         String expireDate = fmt.format(cal.getTime());
