@@ -76,7 +76,7 @@ public class VnpayController {
             throw new BusinessException("Hoa don khong con so tien nao de thanh toan");
         }
 
-        String orderInfo = "Thanh toan hoa don #" + billId + " ky " + bill.getPeriod();
+        String orderInfo = "Thanh toan hoa don " + billId + " ky " + bill.getPeriod().replace("-", "");
         String ipAddr = extractClientIp(request);
 
         String payUrl = vnpayService.createPaymentUrl(billId, remaining.longValue(), orderInfo, ipAddr);
@@ -88,14 +88,38 @@ public class VnpayController {
 
     /**
      * Return URL: VNPay redirect user ve day sau khi thanh toan xong.
-     * Chuyen huong tiep ve frontend de hien ket qua cho user.
+     * Vua update bill (neu giao dich thanh cong) vua redirect ve frontend.
+     *
+     * Day la fallback cho truong hop IPN chua duoc VNPay config —
+     * neu IPN co chay sau nay, idempotent check se tranh double-pay.
      */
     @GetMapping("/return")
     public ResponseEntity<Void> vnpayReturn(@RequestParam Map<String, String> params) {
         boolean valid = vnpayService.verifyCallback(params);
         String responseCode = params.getOrDefault("vnp_ResponseCode", "99");
+        String transactionStatus = params.getOrDefault("vnp_TransactionStatus", "99");
         String txnRef = params.getOrDefault("vnp_TxnRef", "");
         Long billId = vnpayService.extractBillId(txnRef);
+
+        // Neu signature hop le va giao dich thanh cong -> update bill ngay
+        if (valid && "00".equals(responseCode) && "00".equals(transactionStatus) && billId != null) {
+            try {
+                Bill bill = billingService.findById(billId);
+                // Idempotent: chi update neu bill chua PAID
+                if (bill.getStatus() != BillStatus.PAID) {
+                    long vnpAmount = Long.parseLong(params.getOrDefault("vnp_Amount", "0")) / 100;
+                    BillDTO.PayRequest payReq = new BillDTO.PayRequest();
+                    payReq.setAmount(BigDecimal.valueOf(vnpAmount));
+                    payReq.setMethod("VNPAY");
+                    payReq.setReferenceCode(params.get("vnp_TransactionNo"));
+                    payReq.setNote("Thanh toan qua VNPay (return URL), ma GD: " + params.get("vnp_TransactionNo"));
+                    billingService.pay(billId, payReq, bill.getContract().getTenant().getId());
+                    log.info("VNPay return: bill {} marked as PAID, amount={}", billId, vnpAmount);
+                }
+            } catch (Exception e) {
+                log.error("VNPay return: error updating bill {}", billId, e);
+            }
+        }
 
         // Build URL ve frontend kem query params
         StringBuilder url = new StringBuilder(frontendResultUrl == null ? "/" : frontendResultUrl);
