@@ -208,7 +208,7 @@ export default function RentalMsPage() {
 
           <div className="header-right">
             <Link to="/dashboard" className="btn-dashboard">
-              <i className="fa-solid fa-gauge-high" /> {user.role === 'ADMIN' ? 'Quản lý & Báo cáo' : 'Dashboard'}
+              <i className="fa-solid fa-gauge-high" /> {user.role === 'ADMIN' ? 'Quản lý & Báo cáo' : 'Trọ của tôi'}
             </Link>
             <Link to="/notifications" className="notif-btn" title="Thông báo">
               <i className="fa-solid fa-bell" />
@@ -242,7 +242,7 @@ export default function RentalMsPage() {
                     <i className="fa-solid fa-user" /> Hồ sơ cá nhân
                   </button>
                   <Link to="/dashboard" className="dd-item">
-                    <i className="fa-solid fa-gauge-high" /> {user.role === 'ADMIN' ? 'Quản lý & Báo cáo' : 'Dashboard'}
+                    <i className="fa-solid fa-gauge-high" /> {user.role === 'ADMIN' ? 'Quản lý & Báo cáo' : 'Trọ của tôi'}
                   </Link>
                   <Link to="/notifications" className="dd-item">
                     <i className="fa-solid fa-bell" /> Thông báo

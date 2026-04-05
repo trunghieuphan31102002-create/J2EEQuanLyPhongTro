@@ -240,7 +240,7 @@ export default function HomePage() {
         <div className="home-nav-btns">
           {isAuthenticated ? (
             <Link to="/dashboard" className="home-btn home-btn-primary">
-              <i className="fa-solid fa-gauge-high" /> {user?.role === 'ADMIN' ? 'Quản lý & Báo cáo' : 'Dashboard'}
+              <i className="fa-solid fa-gauge-high" /> {user?.role === 'ADMIN' ? 'Quản lý & Báo cáo' : 'Trọ của tôi'}
             </Link>
           ) : (
             <>
