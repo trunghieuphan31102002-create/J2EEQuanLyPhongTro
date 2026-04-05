@@ -60,6 +60,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   '/dashboard/reports':           { title: 'Báo cáo',        subtitle: 'Thống kê & phân tích' },
   '/dashboard/audit-logs':        { title: 'Nhật ký hoạt động', subtitle: 'Lịch sử hệ thống' },
   '/dashboard/profile':           { title: 'Hồ sơ cá nhân',  subtitle: 'Thông tin tài khoản' },
+  '/dashboard/bug-report':        { title: 'Báo lỗi hệ thống', subtitle: 'Gửi báo cáo lỗi tới Admin' },
 };
 
 export default function DashboardLayout() {
@@ -237,6 +238,11 @@ export default function DashboardLayout() {
                 <Link to="/notifications" className="user-dropdown-item" onClick={() => setUserOpen(false)}>
                   <i className="fa-solid fa-bell" /> Tất cả thông báo
                 </Link>
+                {user.role !== 'ADMIN' && (
+                  <Link to="/dashboard/bug-report" className="user-dropdown-item" onClick={() => setUserOpen(false)}>
+                    <i className="fa-solid fa-bug" /> Báo lỗi tới Admin
+                  </Link>
+                )}
                 <div className="user-dropdown-divider" />
                 <button className="user-dropdown-item danger" onClick={handleLogout}>
                   <i className="fa-solid fa-right-from-bracket" /> Đăng xuất

@@ -23,6 +23,7 @@ import SysNotifySection     from '@/pages/dashboard/sections/SysNotifySection';
 import ReportsSection       from '@/pages/dashboard/sections/ReportsSection';
 import AuditLogsSection     from '@/pages/dashboard/sections/AuditLogsSection';
 import ProfileSection       from '@/pages/dashboard/sections/ProfileSection';
+import BugReportSection     from '@/pages/dashboard/sections/BugReportSection';
 
 export default function App() {
   return (
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="reports"          element={<ReportsSection />} />
               <Route path="audit-logs"       element={<AuditLogsSection />} />
               <Route path="profile"          element={<ProfileSection />} />
+              <Route path="bug-report"       element={<BugReportSection />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
