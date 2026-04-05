@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createMaintenance, listMaintenanceByBuilding, listMyMaintenance, updateMaintenanceStatus } from '@/api/maintenance';
 import { listMyBuildings } from '@/api/buildings';
+import { uploadImage } from '@/api/upload';
 import { useToast } from '@/components/Toast';
 import { getErrorMessage } from '@/api/client';
 import { fmtDate } from '@/lib/format';
@@ -26,6 +27,22 @@ export default function MaintenanceSection() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ description: '', priority: 'MEDIUM' as MaintPriority, imageUrl: '' });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (file: File | null) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadImage(file);
+      setForm((f) => ({ ...f, imageUrl: url }));
+      toast.success('Upload ảnh thành công');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Upload ảnh thất bại'));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const isTenant = user?.role === 'TENANT';
   const canManage = user?.role === 'OWNER' || user?.role === 'MANAGER' || user?.role === 'ADMIN';
@@ -169,8 +186,81 @@ export default function MaintenanceSection() {
                 </select>
               </div>
               <div className="form-group">
-                <label>URL ảnh (nếu có)</label>
-                <input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..." />
+                <label>Ảnh minh họa (nếu có)</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+                />
+                {form.imageUrl ? (
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <img
+                      src={form.imageUrl}
+                      alt="minh hoa"
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: 200,
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        objectFit: 'cover',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, imageUrl: '' })}
+                      style={{
+                        position: 'absolute',
+                        top: 6,
+                        right: 6,
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: 'rgba(0,0,0,0.6)',
+                        color: 'white',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                      }}
+                      title="Xóa ảnh"
+                    >
+                      <i className="fa-solid fa-xmark" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    style={{
+                      width: '100%',
+                      padding: '20px 12px',
+                      border: '2px dashed var(--border)',
+                      borderRadius: 8,
+                      background: '#f9fafb',
+                      cursor: uploading ? 'wait' : 'pointer',
+                      fontSize: 13,
+                      color: '#6b7280',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    {uploading ? (
+                      <>
+                        <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 20 }} />
+                        <span>Đang upload...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: 22, color: 'var(--primary)' }} />
+                        <span>Bấm để chọn ảnh (JPG, PNG, tối đa 5MB)</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
             <div className="modal-footer">
