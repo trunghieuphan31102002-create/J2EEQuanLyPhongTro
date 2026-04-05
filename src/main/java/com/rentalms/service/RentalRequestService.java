@@ -53,6 +53,12 @@ public class RentalRequestService {
 
         User tenant = userService.findById(tenantId);
 
+        // Yêu cầu xác thực CCCD (eKYC) trước khi thuê phòng
+        if (tenant.getCccdNumber() == null || tenant.getCccdNumber().isBlank()) {
+            throw new BusinessException(
+                    "Bạn cần xác thực CCCD trước khi thuê phòng. Vui lòng vào Hồ sơ → Xác thực CCCD tự động (eKYC).");
+        }
+
         RentalRequest request = RentalRequest.builder()
                 .room(room)
                 .tenant(tenant)
