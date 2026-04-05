@@ -33,3 +33,4 @@ node_modules/
 # Env
 .env
 .env.local
+rentalms_dump.sql
