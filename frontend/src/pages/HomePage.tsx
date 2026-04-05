@@ -28,7 +28,7 @@ const EMOJIS = ['🏠', '🏡', '🏢', '🏬', '🛋️', '🏗️'];
 const randEmoji = () => EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
 
 export default function HomePage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
 
   const [rooms, setRooms] = useState<RoomListing[]>([]);
@@ -240,7 +240,7 @@ export default function HomePage() {
         <div className="home-nav-btns">
           {isAuthenticated ? (
             <Link to="/dashboard" className="home-btn home-btn-primary">
-              <i className="fa-solid fa-gauge-high" /> Dashboard
+              <i className="fa-solid fa-gauge-high" /> {user?.role === 'ADMIN' ? 'Quản lý & Báo cáo' : 'Dashboard'}
             </Link>
           ) : (
             <>
