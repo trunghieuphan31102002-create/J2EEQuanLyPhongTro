@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { confirmCashPayment, getBill, listMyBills, listOwnerBills, payBill, resetBillToUnpaid } from '@/api/bills';
+import { createVnpayPayment } from '@/api/vnpay';
 import { useToast } from '@/components/Toast';
 import { getErrorMessage } from '@/api/client';
 import { fmtDate, fmtNumber } from '@/lib/format';
@@ -74,6 +75,16 @@ export default function BillsSection() {
     }
   };
 
+  const handleVnpay = async (id: number) => {
+    try {
+      const url = await createVnpayPayment(id);
+      // Redirect toan bo tab sang VNPay
+      window.location.href = url;
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Không tạo được giao dịch VNPay'));
+    }
+  };
+
   const handleReset = async (id: number) => {
     if (!confirm('Reset hóa đơn về Chưa thanh toán và gửi thông báo nhắc nhở?')) return;
     try {
@@ -127,9 +138,19 @@ export default function BillsSection() {
                   <i className="fa-solid fa-eye" /> Chi tiết
                 </button>
                 {(b.status === 'UNPAID' || b.status === 'PARTIAL') && isTenant && (
-                  <button className="btn btn-sm btn-primary" onClick={() => setPayBillId(b.id)}>
-                    <i className="fa-solid fa-credit-card" /> Thanh toán
-                  </button>
+                  <>
+                    <button
+                      className="btn btn-sm"
+                      style={{ background: '#0068ff', color: 'white', border: 'none' }}
+                      onClick={() => handleVnpay(b.id)}
+                      title="Thanh toán online qua VNPay"
+                    >
+                      <i className="fa-solid fa-bolt" /> VNPay
+                    </button>
+                    <button className="btn btn-sm btn-primary" onClick={() => setPayBillId(b.id)}>
+                      <i className="fa-solid fa-credit-card" /> Khai báo TT
+                    </button>
+                  </>
                 )}
                 {isManager && b.status === 'PENDING_CONFIRMATION' && (
                   <button

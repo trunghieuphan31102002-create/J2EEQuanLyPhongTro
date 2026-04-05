@@ -7,6 +7,7 @@ import RegisterPage from '@/pages/RegisterPage';
 import HomePage from '@/pages/HomePage';
 import NotificationsPage from '@/pages/NotificationsPage';
 import RentalMsPage from '@/pages/RentalMsPage';
+import PaymentResultPage from '@/pages/PaymentResultPage';
 import DashboardLayout from '@/pages/dashboard/DashboardLayout';
 import OverviewSection      from '@/pages/dashboard/sections/OverviewSection';
 import BuildingsSection     from '@/pages/dashboard/sections/BuildingsSection';
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/home"     element={<HomePage />} />
             <Route path="/login"    element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/payment/result" element={<PaymentResultPage />} />
             <Route
               path="/rentalms"
               element={
