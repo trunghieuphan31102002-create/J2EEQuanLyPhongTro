@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { getMyProfile, updateProfile } from '@/api/profile';
 import { uploadImage } from '@/api/upload';
+import { verifyCccd } from '@/api/kyc';
 import { useToast } from '@/components/Toast';
 import { getErrorMessage } from '@/api/client';
 import type { Profile } from '@/types/profile';
@@ -14,6 +15,14 @@ export default function ProfileSection() {
     fullName: '', phone: '', cccdNumber: '', bankAccount: '', bankName: '',
     avatarUrl: '', cccdFrontUrl: '', cccdBackUrl: '', zaloLink: '',
   });
+
+  // Quet CCCD tu dong (eKYC)
+  const [scanFront, setScanFront] = useState<File | null>(null);
+  const [scanBack, setScanBack] = useState<File | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanInfo, setScanInfo] = useState<{ dob?: string; sex?: string; address?: string } | null>(null);
+  const scanFrontRef = useRef<HTMLInputElement>(null);
+  const scanBackRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getMyProfile()
@@ -34,6 +43,30 @@ export default function ProfileSection() {
       .catch((err) => toast.error(getErrorMessage(err)))
       .finally(() => setLoading(false));
   }, [toast]);
+
+  const handleScan = async () => {
+    if (!scanFront || !scanBack) {
+      toast.error('Vui lòng chọn cả 2 ảnh CCCD (mặt trước và mặt sau)');
+      return;
+    }
+    setScanning(true);
+    try {
+      const info = await verifyCccd(scanFront, scanBack);
+      setForm((f) => ({
+        ...f,
+        cccdNumber: info.id || f.cccdNumber,
+        fullName: info.name || f.fullName,
+        cccdFrontUrl: info.cccdFrontUrl || f.cccdFrontUrl,
+        cccdBackUrl: info.cccdBackUrl || f.cccdBackUrl,
+      }));
+      setScanInfo({ dob: info.dob, sex: info.sex, address: info.address });
+      toast.success('Xác thực CCCD thành công! Thông tin đã được điền tự động.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Xác thực CCCD thất bại'));
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const handleUpload = async (field: 'avatarUrl' | 'cccdFrontUrl' | 'cccdBackUrl', file: File | null) => {
     if (!file) return;
@@ -133,6 +166,95 @@ export default function ProfileSection() {
               <label>Số điện thoại *</label>
               <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0901234567" />
             </div>
+          </div>
+
+          {/* eKYC - Quet CCCD tu dong */}
+          <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
+              <i className="fa-solid fa-wand-magic-sparkles" style={{ color: '#10b981', marginRight: 6 }} />
+              Xác thực CCCD tự động (eKYC)
+            </div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+              Chọn ảnh 2 mặt CCCD, hệ thống sẽ tự động trích xuất thông tin và điền vào form.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', marginBottom: 4 }}>Ảnh mặt trước</div>
+                <button
+                  type="button"
+                  onClick={() => scanFrontRef.current?.click()}
+                  style={{
+                    width: '100%', height: 40, borderRadius: 6,
+                    border: '1px dashed var(--border)', background: '#f9fafb',
+                    fontSize: 12, color: scanFront ? '#10b981' : '#6b7280',
+                    cursor: 'pointer', padding: '0 10px',
+                    textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap',
+                  }}
+                >
+                  <i className={`fa-solid ${scanFront ? 'fa-circle-check' : 'fa-upload'}`} style={{ marginRight: 6 }} />
+                  {scanFront ? scanFront.name : 'Chọn ảnh mặt trước'}
+                </button>
+                <input
+                  ref={scanFrontRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => setScanFront(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light)', marginBottom: 4 }}>Ảnh mặt sau</div>
+                <button
+                  type="button"
+                  onClick={() => scanBackRef.current?.click()}
+                  style={{
+                    width: '100%', height: 40, borderRadius: 6,
+                    border: '1px dashed var(--border)', background: '#f9fafb',
+                    fontSize: 12, color: scanBack ? '#10b981' : '#6b7280',
+                    cursor: 'pointer', padding: '0 10px',
+                    textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap',
+                  }}
+                >
+                  <i className={`fa-solid ${scanBack ? 'fa-circle-check' : 'fa-upload'}`} style={{ marginRight: 6 }} />
+                  {scanBack ? scanBack.name : 'Chọn ảnh mặt sau'}
+                </button>
+                <input
+                  ref={scanBackRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => setScanBack(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleScan}
+                disabled={scanning || !scanFront || !scanBack}
+                className="btn btn-primary"
+                style={{ height: 40, whiteSpace: 'nowrap' }}
+              >
+                {scanning ? (
+                  <><i className="fa-solid fa-spinner fa-spin" /> Đang quét...</>
+                ) : (
+                  <><i className="fa-solid fa-bolt" /> Quét tự động</>
+                )}
+              </button>
+            </div>
+            {scanInfo && (
+              <div style={{
+                marginTop: 10, padding: '10px 12px',
+                background: '#ecfdf5', border: '1px solid #10b981',
+                borderRadius: 6, fontSize: 12, color: '#065f46',
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                  <i className="fa-solid fa-circle-check" style={{ marginRight: 6 }} />
+                  Thông tin trích xuất từ CCCD:
+                </div>
+                {scanInfo.dob && <div>• Ngày sinh: {scanInfo.dob}</div>}
+                {scanInfo.sex && <div>• Giới tính: {scanInfo.sex}</div>}
+                {scanInfo.address && <div>• Địa chỉ: {scanInfo.address}</div>}
+              </div>
+            )}
           </div>
 
           {/* CCCD */}
