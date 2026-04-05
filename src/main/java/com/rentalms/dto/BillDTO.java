@@ -22,6 +22,7 @@ public class BillDTO {
         private String dueDate;
         private String status;
         private List<ItemResponse> items;
+        private List<PaymentResponse> payments;
     }
 
     @Data
@@ -33,12 +34,25 @@ public class BillDTO {
     }
 
     @Data
+    public static class PaymentResponse {
+        private Long id;
+        private BigDecimal amount;
+        private String method;
+        private String status;
+        private String referenceCode;
+        private String note;
+        private String proofImageUrl;
+        private String paidAt;
+    }
+
+    @Data
     public static class PayRequest {
         @NotNull @Positive
         private BigDecimal amount;
         private String method = "BANK_TRANSFER";
         private String referenceCode;
         private String note;
+        private String proofImageUrl;
     }
 
     @Data

@@ -1,12 +1,23 @@
 export type BillStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'PENDING_CONFIRMATION' | string;
 
-export type PaymentMethod = 'BANK_TRANSFER' | 'CASH' | 'WALLET' | 'POINT';
+export type PaymentMethod = 'BANK_TRANSFER' | 'CASH';
 
 export interface BillItem {
   id: number;
   itemType: string;       // RENT, ELECTRICITY, WATER, SERVICE, PARKING, INTERNET, ...
   description: string | null;
   amount: number;
+}
+
+export interface Payment {
+  id: number;
+  amount: number;
+  method: string;          // CASH, BANK_TRANSFER, VNPAY
+  status: string;          // PENDING, SUCCESS, FAILED
+  referenceCode: string | null;
+  note: string | null;
+  proofImageUrl: string | null;
+  paidAt: string | null;
 }
 
 export interface Bill {
@@ -22,6 +33,7 @@ export interface Bill {
   dueDate: string | null;
   status: BillStatus;
   items?: BillItem[];
+  payments?: Payment[];
 }
 
 export interface PayRequest {
@@ -29,6 +41,7 @@ export interface PayRequest {
   method?: PaymentMethod;
   referenceCode?: string;
   note?: string;
+  proofImageUrl?: string;
 }
 
 export interface AddItemRequest {

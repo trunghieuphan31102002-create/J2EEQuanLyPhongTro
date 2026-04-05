@@ -180,7 +180,10 @@ public class BillingService {
             throw new BusinessException("Hoa don dang cho chu nha xac nhan thanh toan tien mat");
         }
 
-        boolean isCash = "CASH".equalsIgnoreCase(req.getMethod());
+        // CASH va BANK_TRANSFER deu can owner xac nhan
+        // VNPAY auto-confirm (da co callback tu VNPay)
+        String method = req.getMethod() == null ? "" : req.getMethod().toUpperCase();
+        boolean needsConfirmation = "CASH".equals(method) || "BANK_TRANSFER".equals(method);
 
         Payment payment = Payment.builder()
                 .bill(bill)
@@ -188,18 +191,20 @@ public class BillingService {
                 .method(req.getMethod())
                 .referenceCode(req.getReferenceCode())
                 .note(req.getNote())
-                .status(isCash ? "PENDING" : "SUCCESS")
+                .proofImageUrl(req.getProofImageUrl())
+                .status(needsConfirmation ? "PENDING" : "SUCCESS")
                 .paidAt(java.time.LocalDateTime.now())
                 .build();
         paymentRepo.save(payment);
 
-        if (isCash) {
+        if (needsConfirmation) {
             // Chua cap nhat paidAmount — cho owner xac nhan
             bill.setStatus(BillStatus.PENDING_CONFIRMATION);
             billRepo.save(bill);
 
+            String methodLabel = "CASH".equals(method) ? "tien mat" : "chuyen khoan";
             auditService.log(tenantId, null, "PAYMENT_PENDING", "Bill", billId,
-                    "Khai bao thanh toan tien mat " + req.getAmount() + " VND - cho xac nhan");
+                    "Khai bao thanh toan " + methodLabel + " " + req.getAmount() + " VND - cho xac nhan");
 
             // Thong bao cho chu nha de xac nhan
             User owner = bill.getContract().getOwner();
@@ -207,8 +212,8 @@ public class BillingService {
             notificationService.notify(
                     owner,
                     NotificationType.BILL_PAID,
-                    "Tenant khai bao thanh toan tien mat",
-                    tenant.getFullName() + " khai bao da thanh toan tien mat "
+                    "Tenant khai bao thanh toan " + methodLabel,
+                    tenant.getFullName() + " khai bao da thanh toan " + methodLabel + " "
                             + req.getAmount() + " VND cho hoa don thang " + bill.getPeriod()
                             + " (phong " + bill.getContract().getRoom().getRoomNo()
                             + "). Vui long xac nhan da nhan tien.",
@@ -256,8 +261,8 @@ public class BillingService {
             throw new BusinessException("Hoa don nay khong o trang thai cho xac nhan");
         }
 
-        Payment pending = paymentRepo.findPendingCashPayment(billId)
-                .orElseThrow(() -> new NotFoundException("Khong tim thay giao dich tien mat cho hoa don nay"));
+        Payment pending = paymentRepo.findPendingPayment(billId)
+                .orElseThrow(() -> new NotFoundException("Khong tim thay giao dich dang cho xac nhan cho hoa don nay"));
 
         // Xac nhan payment
         pending.setStatus("SUCCESS");
@@ -360,6 +365,23 @@ public class BillingService {
                     return ir;
                 }).collect(Collectors.toList());
         r.setItems(items);
+
+        // Bao gom cac giao dich thanh toan (de owner xem proof image, tenant xem lich su)
+        List<BillDTO.PaymentResponse> payments = paymentRepo.findByBillId(b.getId()).stream()
+                .map(p -> {
+                    BillDTO.PaymentResponse pr = new BillDTO.PaymentResponse();
+                    pr.setId(p.getId());
+                    pr.setAmount(p.getAmount());
+                    pr.setMethod(p.getMethod());
+                    pr.setStatus(p.getStatus());
+                    pr.setReferenceCode(p.getReferenceCode());
+                    pr.setNote(p.getNote());
+                    pr.setProofImageUrl(p.getProofImageUrl());
+                    pr.setPaidAt(p.getPaidAt() != null ? p.getPaidAt().toString() : null);
+                    return pr;
+                }).collect(Collectors.toList());
+        r.setPayments(payments);
+
         return r;
     }
 }

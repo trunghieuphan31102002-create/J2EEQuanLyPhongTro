@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { confirmCashPayment, getBill, listMyBills, listOwnerBills, payBill, resetBillToUnpaid } from '@/api/bills';
 import { createVnpayPayment } from '@/api/vnpay';
+import { uploadImage } from '@/api/upload';
 import { useToast } from '@/components/Toast';
 import { getErrorMessage } from '@/api/client';
 import { fmtDate, fmtNumber } from '@/lib/format';
@@ -294,6 +295,79 @@ function BillDetailView({ bill, onClose, onPay }: { bill: Bill; onClose: () => v
           <div className="label">TỔNG CỘNG</div>
           <div className="value">{fmtNumber(bill.totalAmount)}đ</div>
         </div>
+
+        {/* Lich su giao dich + anh chung tu */}
+        {bill.payments && bill.payments.length > 0 && (
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text)' }}>
+              <i className="fa-solid fa-receipt" style={{ marginRight: 6, color: 'var(--primary)' }} />
+              Lịch sử giao dịch
+            </div>
+            {bill.payments.map((p) => {
+              const methodLabel: Record<string, string> = {
+                CASH: 'Tiền mặt',
+                BANK_TRANSFER: 'Chuyển khoản',
+                VNPAY: 'VNPay',
+              };
+              const statusColor = p.status === 'SUCCESS' ? '#16a34a' : p.status === 'PENDING' ? '#ea580c' : '#6b7280';
+              const statusLabel: Record<string, string> = {
+                PENDING: 'Chờ xác nhận',
+                SUCCESS: 'Đã xác nhận',
+                FAILED: 'Thất bại',
+              };
+              return (
+                <div key={p.id} style={{
+                  background: '#f9fafb',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: 12,
+                  marginBottom: 10,
+                  fontSize: 12,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700 }}>{methodLabel[p.method] || p.method} — {fmtNumber(p.amount)}đ</span>
+                    <span style={{ color: statusColor, fontWeight: 700 }}>{statusLabel[p.status] || p.status}</span>
+                  </div>
+                  {p.paidAt && (
+                    <div style={{ color: 'var(--text-light)', marginBottom: 4 }}>
+                      <i className="fa-solid fa-clock" style={{ marginRight: 4 }} />
+                      {new Date(p.paidAt).toLocaleString('vi-VN')}
+                    </div>
+                  )}
+                  {p.referenceCode && (
+                    <div style={{ color: 'var(--text-light)', marginBottom: 4 }}>
+                      Mã GD: <span style={{ fontFamily: 'monospace' }}>{p.referenceCode}</span>
+                    </div>
+                  )}
+                  {p.note && (
+                    <div style={{ color: 'var(--text-light)', marginBottom: 4, fontStyle: 'italic' }}>
+                      "{p.note}"
+                    </div>
+                  )}
+                  {p.proofImageUrl && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ color: 'var(--text-light)', marginBottom: 4 }}>Ảnh chứng từ:</div>
+                      <img
+                        src={p.proofImageUrl}
+                        alt="chung tu"
+                        onClick={() => window.open(p.proofImageUrl!, '_blank')}
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: 240,
+                          borderRadius: 6,
+                          border: '1px solid var(--border)',
+                          cursor: 'zoom-in',
+                          objectFit: 'cover',
+                        }}
+                        title="Click để phóng to"
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="bill-invoice-footer">
         <button className="btn btn-outline" onClick={onClose}>Đóng</button>
@@ -314,7 +388,10 @@ function PayModal({
   const [method, setMethod] = useState<PaymentMethod>('BANK_TRANSFER');
   const [ref, setRef] = useState('');
   const [note, setNote] = useState('');
+  const [proofImageUrl, setProofImageUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (bill) {
@@ -322,8 +399,22 @@ function PayModal({
       setMethod('BANK_TRANSFER');
       setRef('');
       setNote('');
+      setProofImageUrl('');
     }
   }, [bill]);
+
+  const handleUploadProof = async (file: File | null) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadImage(file);
+      setProofImageUrl(url);
+    } catch (err) {
+      onError(getErrorMessage(err, 'Upload ảnh thất bại'));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -333,9 +424,19 @@ function PayModal({
       onError('Vui lòng nhập số tiền hợp lệ');
       return;
     }
+    if (method === 'BANK_TRANSFER' && !proofImageUrl) {
+      onError('Vui lòng đính kèm ảnh chứng từ chuyển khoản');
+      return;
+    }
     setSubmitting(true);
     try {
-      await payBill(billId, { amount: amt, method, referenceCode: ref || undefined, note: note || undefined });
+      await payBill(billId, {
+        amount: amt,
+        method,
+        referenceCode: ref || undefined,
+        note: note || undefined,
+        proofImageUrl: proofImageUrl || undefined,
+      });
       onSuccess();
     } catch (err) {
       onError(getErrorMessage(err));
@@ -348,11 +449,16 @@ function PayModal({
     <div className={`modal-overlay${billId ? ' show' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal">
         <div className="modal-head">
-          <h3>Thanh toán hóa đơn</h3>
+          <h3>Khai báo thanh toán</h3>
           <button className="modal-close" onClick={onClose}><i className="fa-solid fa-xmark" /></button>
         </div>
         <form onSubmit={submit}>
           <div className="modal-body">
+            <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#92400e' }}>
+              <i className="fa-solid fa-circle-info" style={{ marginRight: 6 }} />
+              Sau khi khai báo, hóa đơn sẽ ở trạng thái <strong>Chờ xác nhận</strong>. Chủ nhà sẽ kiểm tra và xác nhận đã nhận tiền.
+            </div>
+
             <div className="form-group">
               <label>Số tiền (đ) *</label>
               <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={0} />
@@ -362,23 +468,84 @@ function PayModal({
               <select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
                 <option value="BANK_TRANSFER">Chuyển khoản ngân hàng</option>
                 <option value="CASH">Tiền mặt</option>
-                <option value="WALLET">Ví điện tử (MoMo/Zalo/Viettel)</option>
-                <option value="POINT">Điểm thưởng</option>
               </select>
             </div>
-            <div className="form-group">
-              <label>Mã giao dịch</label>
-              <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Nhập mã sau khi chuyển khoản" />
-            </div>
+
+            {method === 'BANK_TRANSFER' && (
+              <>
+                <div className="form-group">
+                  <label>Mã giao dịch</label>
+                  <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Nhập mã sau khi chuyển khoản" />
+                </div>
+                <div className="form-group">
+                  <label>Ảnh chứng từ chuyển khoản *</label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => handleUploadProof(e.target.files?.[0] ?? null)}
+                  />
+                  {proofImageUrl ? (
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img
+                        src={proofImageUrl}
+                        alt="chung tu"
+                        style={{ maxWidth: '100%', maxHeight: 220, borderRadius: 8, border: '1px solid var(--border)', objectFit: 'cover' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProofImageUrl('')}
+                        style={{
+                          position: 'absolute', top: 6, right: 6,
+                          width: 28, height: 28, borderRadius: '50%', border: 'none',
+                          background: 'rgba(0,0,0,0.6)', color: 'white',
+                          cursor: 'pointer', fontSize: 13,
+                        }}
+                        title="Xóa ảnh"
+                      >
+                        <i className="fa-solid fa-xmark" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      style={{
+                        width: '100%', padding: '24px 12px',
+                        border: '2px dashed var(--border)', borderRadius: 8,
+                        background: '#f9fafb', cursor: uploading ? 'wait' : 'pointer',
+                        fontSize: 13, color: '#6b7280',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                      }}
+                    >
+                      {uploading ? (
+                        <>
+                          <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 22 }} />
+                          <span>Đang upload...</span>
+                        </>
+                      ) : (
+                        <>
+                          <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: 24, color: 'var(--primary)' }} />
+                          <span>Bấm để chọn ảnh chứng từ (JPG, PNG, tối đa 5MB)</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
             <div className="form-group">
               <label>Ghi chú</label>
-              <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+              <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: Đã chuyển khoản qua Vietcombank..." />
             </div>
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-outline" onClick={onClose}>Hủy</button>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? 'Đang xử lý...' : 'Xác nhận thanh toán'}
+            <button type="submit" className="btn btn-primary" disabled={submitting || uploading}>
+              {submitting ? 'Đang gửi...' : 'Gửi khai báo'}
             </button>
           </div>
         </form>

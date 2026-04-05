@@ -12,6 +12,10 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("SELECT p FROM Payment p WHERE p.bill.id = :billId AND p.method = 'CASH' AND p.status = 'PENDING' ORDER BY p.createdAt DESC")
     Optional<Payment> findPendingCashPayment(Long billId);
 
+    // Tim payment PENDING bat ky (CASH hoac BANK_TRANSFER) cua 1 bill
+    @Query("SELECT p FROM Payment p WHERE p.bill.id = :billId AND p.status = 'PENDING' ORDER BY p.createdAt DESC")
+    Optional<Payment> findPendingPayment(Long billId);
+
     // Doanh thu thuc theo thang (chi payment SUCCESS)
     @Query("SELECT COALESCE(SUM(p.amount),0) FROM Payment p WHERE p.status = 'SUCCESS' " +
            "AND FUNCTION('DATE_FORMAT', p.paidAt, '%Y-%m') = :yearMonth")
