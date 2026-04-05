@@ -95,22 +95,24 @@ export default function OverviewSection() {
       listMyBuildings().catch(() => []),
       listMyContracts().catch(() => []),
     ]);
-    let totalRooms = 0, occupied = 0;
-    for (const b of buildings.slice(0, 5)) {
-      try {
-        const rooms = await listRoomsInBuilding(b.id);
-        totalRooms += rooms.length;
-        occupied += rooms.filter((rm) => rm.status === 'OCCUPIED').length;
-      } catch { /* skip */ }
-    }
+    // Parallel fetch rooms for all buildings (up to 5)
+    const roomLists = await Promise.all(
+      buildings.slice(0, 5).map((b) => listRoomsInBuilding(b.id).catch(() => []))
+    );
+    const totalRooms = roomLists.reduce((sum, rs) => sum + rs.length, 0);
+    const occupied = roomLists.reduce(
+      (sum, rs) => sum + rs.filter((rm) => rm.status === 'OCCUPIED').length,
+      0
+    );
     const activeContracts = contracts.filter((c) => c.status === 'ACTIVE' || c.status === 'EXTENDED').length;
-    let unpaid = 0;
-    for (const c of contracts.filter((x) => x.status === 'ACTIVE').slice(0, 5)) {
-      try {
-        const bb = await listBillsByContract(c.id);
-        unpaid += bb.filter((b) => b.status === 'UNPAID' || b.status === 'OVERDUE').length;
-      } catch { /* skip */ }
-    }
+    // Parallel fetch bills for active contracts (up to 5)
+    const billLists = await Promise.all(
+      contracts.filter((x) => x.status === 'ACTIVE').slice(0, 5).map((c) => listBillsByContract(c.id).catch(() => []))
+    );
+    const unpaid = billLists.reduce(
+      (sum, bb) => sum + bb.filter((b) => b.status === 'UNPAID' || b.status === 'OVERDUE').length,
+      0
+    );
 
     setHeroStats([
       { num: String(totalRooms),      label: 'Tổng số phòng',    icon: 'fa-building',             color: 'var(--primary)', cls: 'hs-orange' },

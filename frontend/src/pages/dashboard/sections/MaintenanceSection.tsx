@@ -37,14 +37,11 @@ export default function MaintenanceSection() {
         setItems(await listMyMaintenance());
       } else {
         const buildings = await listMyBuildings();
-        const all: MaintenanceRequest[] = [];
-        for (const b of buildings) {
-          try {
-            const list = await listMaintenanceByBuilding(b.id);
-            all.push(...list);
-          } catch { /* skip */ }
-        }
-        setItems(all);
+        // Parallel fetch: N+1 requests run concurrently instead of sequentially
+        const lists = await Promise.all(
+          buildings.map((b) => listMaintenanceByBuilding(b.id).catch(() => [] as MaintenanceRequest[]))
+        );
+        setItems(lists.flat());
       }
     } catch {
       toast.error('Lỗi tải dữ liệu');

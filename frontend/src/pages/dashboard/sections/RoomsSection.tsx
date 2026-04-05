@@ -50,14 +50,13 @@ export default function RoomsSection() {
         setRooms([]);
         return;
       }
-      const all: RoomWithBuilding[] = [];
-      for (const b of blds) {
-        try {
-          const list = await listRoomsInBuilding(b.id);
-          list.forEach((rm) => all.push({ ...rm, buildingName: b.name, buildingId: b.id }));
-        } catch { /* skip */ }
-      }
-      setRooms(all);
+      // Parallel fetch rooms for all buildings
+      const roomLists = await Promise.all(
+        blds.map((b) => listRoomsInBuilding(b.id).catch(() => []).then((rms) =>
+          rms.map((rm) => ({ ...rm, buildingName: b.name, buildingId: b.id }))
+        ))
+      );
+      setRooms(roomLists.flat());
     } catch {
       toast.error('Lỗi tải dữ liệu');
     } finally {
