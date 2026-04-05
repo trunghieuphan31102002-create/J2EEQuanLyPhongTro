@@ -15,6 +15,18 @@ import type { Profile } from '@/types/profile';
 import BuildingMap from '@/components/BuildingMap';
 import './rentalms.css';
 
+// Cộng thêm n tháng vào 1 ngày dạng "YYYY-MM-DD"
+function addMonths(dateStr: string, months: number): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const targetMonth = d.getMonth() + months;
+  const result = new Date(d.getFullYear(), targetMonth, d.getDate());
+  if (result.getDate() !== d.getDate()) {
+    result.setDate(0);
+  }
+  return result.toISOString().split('T')[0];
+}
+
 // ── Category detection ────────────────────────────────────────────────
 type Category = '' | 'phong-tro' | 'nha' | 'can-ho' | 'studio' | 'o-ghep';
 
@@ -585,10 +597,19 @@ function RoomDetailModal({
   const { user } = useAuth();
   const [galleryIdx, setGalleryIdx] = useState(0);
   const [showApplyForm, setShowApplyForm] = useState(false);
+  const [durationMode, setDurationMode] = useState<'months' | 'custom'>('months');
+  const [months, setMonths] = useState<number>(6);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState('');
+  const [endDate, setEndDate] = useState(addMonths(new Date().toISOString().split('T')[0], 6));
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Mode "Theo tháng": tự động tính endDate
+  useEffect(() => {
+    if (durationMode === 'months' && startDate) {
+      setEndDate(addMonths(startDate, months));
+    }
+  }, [durationMode, startDate, months]);
 
   const images = splitImages(room.imageUrl);
   const mediaItems = [...images, ...(room.videoUrl ? [room.videoUrl] : [])];
@@ -609,6 +630,15 @@ function RoomDetailModal({
     e.preventDefault();
     if (!startDate || !endDate) {
       onApplyError('Vui lòng chọn ngày bắt đầu và kết thúc');
+      return;
+    }
+    if (endDate <= startDate) {
+      onApplyError('Ngày kết thúc phải sau ngày bắt đầu');
+      return;
+    }
+    const minEnd = addMonths(startDate, 1);
+    if (endDate < minEnd) {
+      onApplyError('Thời gian thuê tối thiểu là 1 tháng');
       return;
     }
     setSubmitting(true);
@@ -808,14 +838,85 @@ function RoomDetailModal({
 
               {showApplyForm && user?.role === 'TENANT' && (
                 <form className="apply-form" onSubmit={submitApply}>
-                  <div className="form-group">
-                    <label>Ngày bắt đầu *</label>
-                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                  {/* Toggle kiểu chọn thời gian */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12, background: '#f3f4f6', padding: 4, borderRadius: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setDurationMode('months')}
+                      style={{
+                        flex: 1, padding: '8px 12px', borderRadius: 6, border: 'none',
+                        background: durationMode === 'months' ? 'white' : 'transparent',
+                        color: durationMode === 'months' ? '#16a34a' : '#6b7280',
+                        fontWeight: durationMode === 'months' ? 700 : 500,
+                        fontSize: 13, cursor: 'pointer',
+                        boxShadow: durationMode === 'months' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      }}
+                    >
+                      <i className="fa-solid fa-calendar-days" style={{ marginRight: 6 }} />
+                      Theo tháng
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDurationMode('custom')}
+                      style={{
+                        flex: 1, padding: '8px 12px', borderRadius: 6, border: 'none',
+                        background: durationMode === 'custom' ? 'white' : 'transparent',
+                        color: durationMode === 'custom' ? '#16a34a' : '#6b7280',
+                        fontWeight: durationMode === 'custom' ? 700 : 500,
+                        fontSize: 13, cursor: 'pointer',
+                        boxShadow: durationMode === 'custom' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      }}
+                    >
+                      <i className="fa-solid fa-calendar-check" style={{ marginRight: 6 }} />
+                      Theo ngày cụ thể
+                    </button>
                   </div>
-                  <div className="form-group">
-                    <label>Ngày kết thúc *</label>
-                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
-                  </div>
+
+                  {durationMode === 'months' ? (
+                    <>
+                      <div className="form-group">
+                        <label>Ngày bắt đầu *</label>
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>Số tháng thuê *</label>
+                        <select
+                          value={months}
+                          onChange={(e) => setMonths(Number(e.target.value))}
+                          style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #d1d5db', borderRadius: 8, fontSize: 14 }}
+                        >
+                          {[1, 2, 3, 4, 5, 6, 9, 12, 18, 24].map((m) => (
+                            <option key={m} value={m}>{m} tháng</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#059669', background: '#ecfdf5', padding: '8px 12px', borderRadius: 6, marginBottom: 10 }}>
+                        <i className="fa-solid fa-circle-info" style={{ marginRight: 6 }} />
+                        Hợp đồng sẽ kết thúc vào: <strong>{endDate ? new Date(endDate).toLocaleDateString('vi-VN') : '—'}</strong>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="form-group">
+                        <label>Ngày bắt đầu *</label>
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>Ngày kết thúc *</label>
+                        <input
+                          type="date"
+                          value={endDate}
+                          min={startDate ? addMonths(startDate, 1) : undefined}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', padding: '8px 12px', borderRadius: 6, marginBottom: 10 }}>
+                        <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: 6 }} />
+                        Tối thiểu <strong>1 tháng</strong>. Dùng cho bạn muốn thuê hơn 1 tháng + vài ngày lẻ.
+                      </div>
+                    </>
+                  )}
                   <div className="form-group">
                     <label>Ghi chú cho chủ nhà</label>
                     <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: Tôi muốn xem phòng cuối tuần..." />

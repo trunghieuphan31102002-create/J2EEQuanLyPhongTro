@@ -51,6 +51,11 @@ public class RentalRequestService {
             throw new BusinessException("Ngày bắt đầu và kết thúc không hợp lệ");
         }
 
+        // Phải thuê tối thiểu 1 tháng
+        if (req.getEndDate().isBefore(req.getStartDate().plusMonths(1))) {
+            throw new BusinessException("Thời gian thuê tối thiểu là 1 tháng");
+        }
+
         User tenant = userService.findById(tenantId);
 
         // Yêu cầu xác thực CCCD (eKYC) trước khi thuê phòng
