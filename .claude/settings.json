@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -l \"thanh toan\\\\|payment\\\\|invoice\\\\|hoa don\\\\|QR\\\\|VietQR\" /c/Users/Admin/Desktop/J2EE-QuanLyPhongTro/rentalms/src/main/resources/static/*.html)",
+      "Bash(grep -l \"payment\\\\|thanh toan\\\\|invoice\\\\|hoa don\" /c/Users/Admin/Desktop/J2EE-QuanLyPhongTro/rentalms/src/main/java/com/rentalms/controller/*.java)",
+      "Bash(grep -n \"class.*Service\\\\|class.*Controller\" /c/Users/Admin/Desktop/J2EE-QuanLyPhongTro/rentalms/src/main/java/com/rentalms/service/*.java)",
+      "Bash(grep -E \"\\\\.\\(jsp|html|css|js\\)$\")",
+      "Bash(find /c/Users/Admin/Desktop/J2EE-QuanLyPhongTro/rentalms/src/main/java/com/rentalms/controller -name \"*.java\" -exec wc -l {} +)",
+      "Bash(wc -l /c/Users/Admin/Desktop/J2EE-QuanLyPhongTro/rentalms/src/main/resources/static/*.html)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(npm --version)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5173)",
+      "Bash(mvn clean:*)",
+      "Bash(mvn -q clean compile)",
+      "Bash(mvn -q compile)",
+      "Bash(java -version)",
+      "Bash(mvn -version)",
+      "Bash(npm -v)",
+      "Bash(mvn -q dependency:resolve)"
+    ]
+  }
+}
