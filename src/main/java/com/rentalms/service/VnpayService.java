@@ -14,122 +14,141 @@ import java.util.*;
 
 /**
  * Dich vu tich hop VNPay Sandbox.
- * Tai lieu: https://sandbox.vnpayment.vn/apis/docs/huong-dan-tich-hop/
- *
- * Quy trinh:
- *  1. Tao URL thanh toan voi HMAC-SHA512 signature
- *  2. Client redirect sang URL do
- *  3. Sau khi user thanh toan, VNPay:
- *     - Redirect ve `vnp_ReturnUrl` (kem query params ket qua)
- *     - Goi server-to-server ve `vnp_IpnUrl` (xac nhan thanh toan)
- *  4. Backend verify signature cua callback de dam bao tinh xac thuc
+ * Code viet theo dung mau chinh thuc cua VNPay:
+ * https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html
  */
 @Slf4j
 @Service
 public class VnpayService {
 
     @Value("${vnpay.tmn-code:}")
-    private String tmnCode;
+    private String tmnCodeRaw;
 
     @Value("${vnpay.hash-secret:}")
-    private String hashSecret;
+    private String hashSecretRaw;
 
     @Value("${vnpay.pay-url:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}")
     private String payUrl;
 
     @Value("${vnpay.return-url:}")
-    private String returnUrl;
+    private String returnUrlRaw;
 
     @Value("${vnpay.version:2.1.0}")
     private String version;
 
+    private String tmnCode() { return tmnCodeRaw == null ? "" : tmnCodeRaw.trim(); }
+    private String hashSecret() { return hashSecretRaw == null ? "" : hashSecretRaw.trim(); }
+    private String returnUrl() { return returnUrlRaw == null ? "" : returnUrlRaw.trim(); }
+
     /**
-     * Tao URL thanh toan VNPay.
-     *
-     * @param billId      ID hoa don trong DB (dung lam vnp_TxnRef)
-     * @param amountVnd   So tien (VND, dang BigDecimal.longValue())
-     * @param orderInfo   Mo ta don hang (hien tren trang VNPay)
-     * @param ipAddress   IP cua client (bat buoc)
-     * @return URL day du de redirect sang VNPay
+     * Tao URL thanh toan VNPay — viet theo dung pattern cua sample VNPay chinh thuc.
      */
     public String createPaymentUrl(Long billId, long amountVnd, String orderInfo, String ipAddress) {
-        if (tmnCode == null || tmnCode.isBlank() || hashSecret == null || hashSecret.isBlank()) {
+        String tmn = tmnCode();
+        String secret = hashSecret();
+        String retUrl = returnUrl();
+
+        if (tmn.isEmpty() || secret.isEmpty()) {
             throw new BusinessException("Chua cau hinh VNPay (VNPAY_TMN_CODE, VNPAY_HASH_SECRET)");
         }
-        if (returnUrl == null || returnUrl.isBlank()) {
+        if (retUrl.isEmpty()) {
             throw new BusinessException("Chua cau hinh VNPAY_RETURN_URL");
         }
 
-        // vnp_TxnRef phai duy nhat — dung billId + timestamp de tranh trung khi user thanh toan lai
+        log.info("VNPay config check: tmnCode.len={}, hashSecret.len={}, returnUrl={}",
+                tmn.length(), secret.length(), retUrl);
+
+        // vnp_TxnRef phai duy nhat
         String txnRef = billId + "-" + System.currentTimeMillis();
 
-        // Format thoi gian theo GMT+7
-        SimpleDateFormat fmt = new SimpleDateFormat("yyyyMMddHHmmss");
-        fmt.setTimeZone(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
-        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
-        String createDate = fmt.format(cal.getTime());
-        cal.add(Calendar.MINUTE, 15); // het han sau 15 phut
-        String expireDate = fmt.format(cal.getTime());
+        // Format thoi gian theo mau VNPay (GMT+7)
+        Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
+        formatter.setTimeZone(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+        String vnp_CreateDate = formatter.format(cld.getTime());
+        cld.add(Calendar.MINUTE, 15);
+        String vnp_ExpireDate = formatter.format(cld.getTime());
 
-        Map<String, String> params = new TreeMap<>();
-        params.put("vnp_Version", version);
-        params.put("vnp_Command", "pay");
-        params.put("vnp_TmnCode", tmnCode);
-        params.put("vnp_Amount", String.valueOf(amountVnd * 100)); // VNPay yeu cau x100
-        params.put("vnp_CurrCode", "VND");
-        params.put("vnp_TxnRef", txnRef);
-        params.put("vnp_OrderInfo", orderInfo);
-        params.put("vnp_OrderType", "other");
-        params.put("vnp_Locale", "vn");
-        params.put("vnp_ReturnUrl", returnUrl);
-        params.put("vnp_IpAddr", ipAddress == null ? "127.0.0.1" : ipAddress);
-        params.put("vnp_CreateDate", createDate);
-        params.put("vnp_ExpireDate", expireDate);
+        Map<String, String> vnp_Params = new HashMap<>();
+        vnp_Params.put("vnp_Version", version);
+        vnp_Params.put("vnp_Command", "pay");
+        vnp_Params.put("vnp_TmnCode", tmn);
+        vnp_Params.put("vnp_Amount", String.valueOf(amountVnd * 100));
+        vnp_Params.put("vnp_CurrCode", "VND");
+        vnp_Params.put("vnp_TxnRef", txnRef);
+        vnp_Params.put("vnp_OrderInfo", orderInfo);
+        vnp_Params.put("vnp_OrderType", "other");
+        vnp_Params.put("vnp_Locale", "vn");
+        vnp_Params.put("vnp_ReturnUrl", retUrl);
+        vnp_Params.put("vnp_IpAddr", ipAddress == null || ipAddress.isEmpty() ? "127.0.0.1" : ipAddress);
+        vnp_Params.put("vnp_CreateDate", vnp_CreateDate);
+        vnp_Params.put("vnp_ExpireDate", vnp_ExpireDate);
 
-        // Build query string + hash data
+        // === Build hash data + query theo dung pattern VNPay sample ===
+        List<String> fieldNames = new ArrayList<>(vnp_Params.keySet());
+        Collections.sort(fieldNames);
         StringBuilder hashData = new StringBuilder();
         StringBuilder query = new StringBuilder();
-        for (Map.Entry<String, String> e : params.entrySet()) {
-            if (e.getValue() == null || e.getValue().isEmpty()) continue;
-            if (hashData.length() > 0) {
-                hashData.append('&');
-                query.append('&');
+        Iterator<String> itr = fieldNames.iterator();
+        while (itr.hasNext()) {
+            String fieldName = itr.next();
+            String fieldValue = vnp_Params.get(fieldName);
+            if (fieldValue != null && !fieldValue.isEmpty()) {
+                // Build hash data
+                hashData.append(fieldName);
+                hashData.append('=');
+                hashData.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII));
+                // Build query
+                query.append(URLEncoder.encode(fieldName, StandardCharsets.US_ASCII));
+                query.append('=');
+                query.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII));
+                if (itr.hasNext()) {
+                    query.append('&');
+                    hashData.append('&');
+                }
             }
-            hashData.append(e.getKey()).append('=')
-                    .append(URLEncoder.encode(e.getValue(), StandardCharsets.US_ASCII));
-            query.append(URLEncoder.encode(e.getKey(), StandardCharsets.US_ASCII)).append('=')
-                    .append(URLEncoder.encode(e.getValue(), StandardCharsets.US_ASCII));
         }
 
-        String secureHash = hmacSHA512(hashSecret, hashData.toString());
-        query.append("&vnp_SecureHash=").append(secureHash);
+        String queryUrl = query.toString();
+        String vnp_SecureHash = hmacSHA512(secret, hashData.toString());
+        queryUrl += "&vnp_SecureHash=" + vnp_SecureHash;
+        String paymentUrl = payUrl + "?" + queryUrl;
 
-        String fullUrl = payUrl + "?" + query;
+        log.info("VNPay hashData: {}", hashData);
+        log.info("VNPay secureHash: {}", vnp_SecureHash);
         log.info("VNPay payment URL created for bill {}: txnRef={}", billId, txnRef);
-        return fullUrl;
+        return paymentUrl;
     }
 
     /**
      * Xac thuc signature tu callback (Return URL hoac IPN).
-     * Dam bao du lieu thuc su den tu VNPay, khong bi gia mao.
      */
     public boolean verifyCallback(Map<String, String> params) {
         String receivedHash = params.get("vnp_SecureHash");
         if (receivedHash == null) return false;
 
-        Map<String, String> sorted = new TreeMap<>(params);
-        sorted.remove("vnp_SecureHash");
-        sorted.remove("vnp_SecureHashType");
+        Map<String, String> filtered = new HashMap<>(params);
+        filtered.remove("vnp_SecureHash");
+        filtered.remove("vnp_SecureHashType");
 
+        List<String> fieldNames = new ArrayList<>(filtered.keySet());
+        Collections.sort(fieldNames);
         StringBuilder hashData = new StringBuilder();
-        for (Map.Entry<String, String> e : sorted.entrySet()) {
-            if (e.getValue() == null || e.getValue().isEmpty()) continue;
-            if (hashData.length() > 0) hashData.append('&');
-            hashData.append(e.getKey()).append('=')
-                    .append(URLEncoder.encode(e.getValue(), StandardCharsets.US_ASCII));
+        Iterator<String> itr = fieldNames.iterator();
+        while (itr.hasNext()) {
+            String fieldName = itr.next();
+            String fieldValue = filtered.get(fieldName);
+            if (fieldValue != null && !fieldValue.isEmpty()) {
+                hashData.append(fieldName);
+                hashData.append('=');
+                hashData.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII));
+                if (itr.hasNext()) {
+                    hashData.append('&');
+                }
+            }
         }
 
-        String computed = hmacSHA512(hashSecret, hashData.toString());
+        String computed = hmacSHA512(hashSecret(), hashData.toString());
         return computed.equalsIgnoreCase(receivedHash);
     }
 
@@ -147,14 +166,22 @@ public class VnpayService {
 
     private String hmacSHA512(String key, String data) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA512");
-            mac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA512"));
-            byte[] bytes = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(bytes.length * 2);
-            for (byte b : bytes) sb.append(String.format("%02x", b & 0xff));
+            if (key == null || data == null) {
+                throw new NullPointerException();
+            }
+            Mac hmac512 = Mac.getInstance("HmacSHA512");
+            byte[] hmacKeyBytes = key.getBytes(StandardCharsets.UTF_8);
+            SecretKeySpec secretKey = new SecretKeySpec(hmacKeyBytes, "HmacSHA512");
+            hmac512.init(secretKey);
+            byte[] dataBytes = data.getBytes(StandardCharsets.UTF_8);
+            byte[] result = hmac512.doFinal(dataBytes);
+            StringBuilder sb = new StringBuilder(2 * result.length);
+            for (byte b : result) {
+                sb.append(String.format("%02x", b & 0xff));
+            }
             return sb.toString();
-        } catch (Exception e) {
-            throw new BusinessException("Loi ky HMAC-SHA512: " + e.getMessage());
+        } catch (Exception ex) {
+            throw new BusinessException("Loi ky HMAC-SHA512: " + ex.getMessage());
         }
     }
 }
