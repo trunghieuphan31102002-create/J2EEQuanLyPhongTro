@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -33,6 +34,16 @@ public class Building {
     // PUBLIC hoac PRIVATE
     @Column(nullable = false)
     private String publishStatus = "PRIVATE";
+
+    // Don gia dien (VND/kWh) — owner set theo toa nha
+    @Builder.Default
+    @Column(precision = 12, scale = 2)
+    private BigDecimal electricityUnitPrice = new BigDecimal("3500");
+
+    // Don gia nuoc (VND/m3)
+    @Builder.Default
+    @Column(precision = 12, scale = 2)
+    private BigDecimal waterUnitPrice = new BigDecimal("20000");
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)

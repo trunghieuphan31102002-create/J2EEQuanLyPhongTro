@@ -45,3 +45,16 @@ export async function addBillItem(id: number, payload: AddItemRequest): Promise<
   if (!data.data) throw new Error(data.message || 'Thêm khoản thất bại');
   return data.data;
 }
+
+export interface SetUtilitiesRequest {
+  electricityOld?: number | null;
+  electricityNew?: number | null;
+  waterOld?: number | null;
+  waterNew?: number | null;
+}
+
+export async function setBillUtilities(id: number, payload: SetUtilitiesRequest): Promise<Bill> {
+  const { data } = await apiClient.post<ApiResponse<Bill>>(`/bills/${id}/utilities`, payload);
+  if (!data.data) throw new Error(data.message || 'Cập nhật tiền điện/nước thất bại');
+  return data.data;
+}

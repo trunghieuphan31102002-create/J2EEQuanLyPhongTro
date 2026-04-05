@@ -69,6 +69,16 @@ public class BillController {
                 billingService.addItem(id, req, currentUser.getId())));
     }
 
+    @PostMapping("/{id}/utilities")
+    @PreAuthorize("hasAnyRole('OWNER','ADMIN','MANAGER')")
+    public ResponseEntity<ApiResponse<BillDTO.Response>> setUtilities(
+            @PathVariable Long id,
+            @RequestBody BillDTO.SetUtilitiesRequest req) {
+        Bill bill = billingService.setUtilityReadings(id, req, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.ok("Cap nhat tien dien/nuoc thanh cong",
+                billingService.toResponse(bill)));
+    }
+
     @PostMapping("/{id}/confirm-cash")
     @PreAuthorize("hasAnyRole('OWNER','ADMIN','MANAGER')")
     public ResponseEntity<ApiResponse<Bill>> confirmCash(@PathVariable Long id) {

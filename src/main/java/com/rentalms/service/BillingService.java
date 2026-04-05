@@ -145,6 +145,90 @@ public class BillingService {
         return bill;
     }
 
+    /**
+     * Cap nhat chi so dien/nuoc cho hoa don. Owner/Manager input so cu/moi,
+     * he thong tu tinh tien dua tren don gia cua Building, thay the cac BillItem
+     * ELECTRICITY va WATER cu, va cap nhat lai totalAmount cua bill.
+     */
+    @Transactional
+    public Bill setUtilityReadings(Long billId, BillDTO.SetUtilitiesRequest req, Long actorId) {
+        Bill bill = findById(billId);
+        User actor = userService.findById(actorId);
+        accessService.assertCanManage(bill.getContract().getRoom().getBuilding(), actor);
+
+        if (bill.getStatus() == BillStatus.PAID || bill.getStatus() == BillStatus.CANCELLED) {
+            throw new BusinessException("Khong the cap nhat hoa don da thanh toan hoac da huy");
+        }
+
+        var building = bill.getContract().getRoom().getBuilding();
+        BigDecimal elecPrice = building.getElectricityUnitPrice() != null
+                ? building.getElectricityUnitPrice() : new BigDecimal("3500");
+        BigDecimal waterPrice = building.getWaterUnitPrice() != null
+                ? building.getWaterUnitPrice() : new BigDecimal("20000");
+
+        // Xoa cac BillItem ELECTRICITY va WATER cu (neu co)
+        List<BillItem> existing = billItemRepo.findByBillId(billId);
+        for (BillItem item : existing) {
+            if ("ELECTRICITY".equals(item.getItemType()) || "WATER".equals(item.getItemType())) {
+                billItemRepo.delete(item);
+            }
+        }
+
+        // Tinh va tao BillItem moi cho dien
+        BigDecimal elecAmount = BigDecimal.ZERO;
+        if (req.getElectricityOld() != null && req.getElectricityNew() != null
+                && req.getElectricityNew() >= req.getElectricityOld()) {
+            double consumption = req.getElectricityNew() - req.getElectricityOld();
+            elecAmount = elecPrice.multiply(BigDecimal.valueOf(consumption))
+                    .setScale(0, java.math.RoundingMode.HALF_UP);
+            BillItem elec = BillItem.builder()
+                    .bill(bill)
+                    .itemType("ELECTRICITY")
+                    .description(String.format("Tieu thu %.0f kWh (%.0f -> %.0f) x %sd/kWh",
+                            consumption, req.getElectricityOld(), req.getElectricityNew(), elecPrice.toPlainString()))
+                    .amount(elecAmount)
+                    .previousReading(req.getElectricityOld())
+                    .currentReading(req.getElectricityNew())
+                    .unitPrice(elecPrice)
+                    .build();
+            billItemRepo.save(elec);
+        }
+
+        // Tinh va tao BillItem moi cho nuoc
+        BigDecimal waterAmount = BigDecimal.ZERO;
+        if (req.getWaterOld() != null && req.getWaterNew() != null
+                && req.getWaterNew() >= req.getWaterOld()) {
+            double consumption = req.getWaterNew() - req.getWaterOld();
+            waterAmount = waterPrice.multiply(BigDecimal.valueOf(consumption))
+                    .setScale(0, java.math.RoundingMode.HALF_UP);
+            BillItem water = BillItem.builder()
+                    .bill(bill)
+                    .itemType("WATER")
+                    .description(String.format("Tieu thu %.0f m3 (%.0f -> %.0f) x %sd/m3",
+                            consumption, req.getWaterOld(), req.getWaterNew(), waterPrice.toPlainString()))
+                    .amount(waterAmount)
+                    .previousReading(req.getWaterOld())
+                    .currentReading(req.getWaterNew())
+                    .unitPrice(waterPrice)
+                    .build();
+            billItemRepo.save(water);
+        }
+
+        // Tinh lai total tu tat ca items con lai (RENT + cac khoan khac) + dien + nuoc
+        BigDecimal newTotal = BigDecimal.ZERO;
+        List<BillItem> remaining = billItemRepo.findByBillId(billId);
+        for (BillItem item : remaining) {
+            newTotal = newTotal.add(item.getAmount());
+        }
+        bill.setTotalAmount(newTotal);
+        billRepo.save(bill);
+
+        auditService.log(actorId, null, "SET_UTILITIES", "Bill", billId,
+                "Cap nhat tien dien " + elecAmount + "d, tien nuoc " + waterAmount + "d");
+
+        return bill;
+    }
+
     @Transactional
     public Bill addItem(Long billId, BillDTO.AddItemRequest req, Long actorId) {
         Bill bill = findById(billId);
@@ -362,6 +446,9 @@ public class BillingService {
                     ir.setItemType(i.getItemType());
                     ir.setDescription(i.getDescription());
                     ir.setAmount(i.getAmount());
+                    ir.setPreviousReading(i.getPreviousReading());
+                    ir.setCurrentReading(i.getCurrentReading());
+                    ir.setUnitPrice(i.getUnitPrice());
                     return ir;
                 }).collect(Collectors.toList());
         r.setItems(items);

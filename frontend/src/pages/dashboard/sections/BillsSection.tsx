@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { confirmCashPayment, getBill, listMyBills, listOwnerBills, payBill, resetBillToUnpaid } from '@/api/bills';
+import { confirmCashPayment, getBill, listMyBills, listOwnerBills, payBill, resetBillToUnpaid, setBillUtilities } from '@/api/bills';
 import { createVnpayPayment } from '@/api/vnpay';
 import { uploadImage } from '@/api/upload';
 import { useToast } from '@/components/Toast';
@@ -37,6 +37,7 @@ export default function BillsSection() {
   const [detailBill, setDetailBill] = useState<Bill | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [payBillId, setPayBillId] = useState<number | null>(null);
+  const [utilBill, setUtilBill] = useState<Bill | null>(null);
 
   const isTenant = user?.role === 'TENANT';
   const isManager = user?.role === 'OWNER' || user?.role === 'MANAGER' || user?.role === 'ADMIN';
@@ -183,6 +184,8 @@ export default function BillsSection() {
               bill={detailBill}
               onClose={() => setDetailBill(null)}
               onPay={() => { setDetailBill(null); setPayBillId(detailBill.id); }}
+              canManage={isManager}
+              onSetUtilities={() => { setUtilBill(detailBill); setDetailBill(null); }}
             />
           )}
         </div>
@@ -196,11 +199,27 @@ export default function BillsSection() {
         onSuccess={() => { setPayBillId(null); refresh(); toast.success('Thanh toán thành công!'); }}
         onError={(m) => toast.error(m)}
       />
+
+      {/* Utilities modal */}
+      <UtilitiesModal
+        bill={utilBill}
+        onClose={() => setUtilBill(null)}
+        onSuccess={() => { setUtilBill(null); refresh(); toast.success('Đã cập nhật tiền điện/nước!'); }}
+        onError={(m) => toast.error(m)}
+      />
     </>
   );
 }
 
-function BillDetailView({ bill, onClose, onPay }: { bill: Bill; onClose: () => void; onPay: () => void }) {
+function BillDetailView({
+  bill, onClose, onPay, onSetUtilities, canManage,
+}: {
+  bill: Bill;
+  onClose: () => void;
+  onPay: () => void;
+  onSetUtilities?: () => void;
+  canManage?: boolean;
+}) {
   const items = bill.items ?? [];
   const statusClsMap: Record<string, string> = {
     UNPAID: 'bsb-unpaid', PAID: 'bsb-paid', OVERDUE: 'bsb-overdue',
@@ -371,7 +390,17 @@ function BillDetailView({ bill, onClose, onPay }: { bill: Bill; onClose: () => v
       </div>
       <div className="bill-invoice-footer">
         <button className="btn btn-outline" onClick={onClose}>Đóng</button>
-        {canPay && (
+        {canManage && onSetUtilities && canPay && (
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={onSetUtilities}
+            style={{ color: '#059669', borderColor: '#059669' }}
+          >
+            <i className="fa-solid fa-bolt" /> Cập nhật điện/nước
+          </button>
+        )}
+        {canPay && !canManage && (
           <button className="btn btn-primary" onClick={onPay}>
             <i className="fa-solid fa-credit-card" /> Thanh toán
           </button>
@@ -546,6 +575,151 @@ function PayModal({
             <button type="button" className="btn btn-outline" onClick={onClose}>Hủy</button>
             <button type="submit" className="btn btn-primary" disabled={submitting || uploading}>
               {submitting ? 'Đang gửi...' : 'Gửi khai báo'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Modal cap nhat tien dien/nuoc — cho Owner/Manager
+function UtilitiesModal({
+  bill, onClose, onSuccess, onError,
+}: {
+  bill: Bill | null;
+  onClose: () => void;
+  onSuccess: () => void;
+  onError: (m: string) => void;
+}) {
+  const [elecOld, setElecOld] = useState('');
+  const [elecNew, setElecNew] = useState('');
+  const [waterOld, setWaterOld] = useState('');
+  const [waterNew, setWaterNew] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Auto-populate từ BillItem hiện có (nếu đã từng cập nhật)
+  useEffect(() => {
+    if (!bill) {
+      setElecOld(''); setElecNew(''); setWaterOld(''); setWaterNew('');
+      return;
+    }
+    const items = bill.items ?? [];
+    const elecItem = items.find((i) => i.itemType === 'ELECTRICITY') as (typeof items[0] & { previousReading?: number; currentReading?: number }) | undefined;
+    const waterItem = items.find((i) => i.itemType === 'WATER') as (typeof items[0] & { previousReading?: number; currentReading?: number }) | undefined;
+    setElecOld(elecItem?.previousReading != null ? String(elecItem.previousReading) : '');
+    setElecNew(elecItem?.currentReading != null ? String(elecItem.currentReading) : '');
+    setWaterOld(waterItem?.previousReading != null ? String(waterItem.previousReading) : '');
+    setWaterNew(waterItem?.currentReading != null ? String(waterItem.currentReading) : '');
+  }, [bill]);
+
+  // Don gia mac dinh (chi de preview — backend se lay tu Building)
+  const ELEC_PRICE = 3500;
+  const WATER_PRICE = 20000;
+
+  const elecOldN = parseFloat(elecOld) || 0;
+  const elecNewN = parseFloat(elecNew) || 0;
+  const waterOldN = parseFloat(waterOld) || 0;
+  const waterNewN = parseFloat(waterNew) || 0;
+  const elecConsumption = Math.max(0, elecNewN - elecOldN);
+  const waterConsumption = Math.max(0, waterNewN - waterOldN);
+  const elecAmount = elecConsumption * ELEC_PRICE;
+  const waterAmount = waterConsumption * WATER_PRICE;
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!bill) return;
+    if (elecNewN < elecOldN) {
+      onError('Số điện mới phải ≥ số điện cũ');
+      return;
+    }
+    if (waterNewN < waterOldN) {
+      onError('Số nước mới phải ≥ số nước cũ');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await setBillUtilities(bill.id, {
+        electricityOld: elecOld ? elecOldN : null,
+        electricityNew: elecNew ? elecNewN : null,
+        waterOld: waterOld ? waterOldN : null,
+        waterNew: waterNew ? waterNewN : null,
+      });
+      onSuccess();
+    } catch (err) {
+      onError(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className={`modal-overlay${bill ? ' show' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal">
+        <div className="modal-head">
+          <h3><i className="fa-solid fa-bolt" style={{ color: '#059669', marginRight: 6 }} />Cập nhật tiền điện/nước</h3>
+          <button className="modal-close" onClick={onClose}><i className="fa-solid fa-xmark" /></button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="modal-body">
+            <div style={{ background: '#ecfdf5', border: '1px solid #10b981', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#065f46' }}>
+              <i className="fa-solid fa-circle-info" style={{ marginRight: 6 }} />
+              Nhập số công tơ cũ và mới. Hệ thống sẽ tự tính tiền theo đơn giá của tòa nhà và cập nhật vào hóa đơn.
+            </div>
+
+            {/* Dien */}
+            <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8, marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: '#ca8a04' }}>
+                <i className="fa-solid fa-bolt" /> Tiền điện
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Số điện cũ (kWh)</label>
+                  <input type="number" step="any" value={elecOld} onChange={(e) => setElecOld(e.target.value)} placeholder="VD: 1250" />
+                </div>
+                <div className="form-group">
+                  <label>Số điện mới (kWh)</label>
+                  <input type="number" step="any" value={elecNew} onChange={(e) => setElecNew(e.target.value)} placeholder="VD: 1350" />
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+                Tiêu thụ: <strong>{elecConsumption} kWh</strong> × {fmtNumber(ELEC_PRICE)}đ/kWh = <strong style={{ color: '#ca8a04' }}>{fmtNumber(elecAmount)}đ</strong>
+              </div>
+            </div>
+
+            {/* Nuoc */}
+            <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8, marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: '#0284c7' }}>
+                <i className="fa-solid fa-droplet" /> Tiền nước
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Số nước cũ (m³)</label>
+                  <input type="number" step="any" value={waterOld} onChange={(e) => setWaterOld(e.target.value)} placeholder="VD: 45" />
+                </div>
+                <div className="form-group">
+                  <label>Số nước mới (m³)</label>
+                  <input type="number" step="any" value={waterNew} onChange={(e) => setWaterNew(e.target.value)} placeholder="VD: 52" />
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+                Tiêu thụ: <strong>{waterConsumption} m³</strong> × {fmtNumber(WATER_PRICE)}đ/m³ = <strong style={{ color: '#0284c7' }}>{fmtNumber(waterAmount)}đ</strong>
+              </div>
+            </div>
+
+            <div style={{
+              background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8,
+              padding: '12px 14px', fontSize: 13, color: '#92400e',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span><strong>Tổng tiền điện + nước:</strong></span>
+              <strong style={{ fontSize: 16 }}>{fmtNumber(elecAmount + waterAmount)}đ</strong>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-outline" onClick={onClose}>Hủy</button>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Đang lưu...' : 'Lưu và cập nhật hóa đơn'}
             </button>
           </div>
         </form>

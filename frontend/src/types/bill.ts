@@ -7,6 +7,9 @@ export interface BillItem {
   itemType: string;       // RENT, ELECTRICITY, WATER, SERVICE, PARKING, INTERNET, ...
   description: string | null;
   amount: number;
+  previousReading?: number | null;
+  currentReading?: number | null;
+  unitPrice?: number | null;
 }
 
 export interface Payment {

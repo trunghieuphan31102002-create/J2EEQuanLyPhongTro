@@ -31,6 +31,9 @@ public class BillDTO {
         private String itemType;
         private String description;
         private BigDecimal amount;
+        private Double previousReading;
+        private Double currentReading;
+        private BigDecimal unitPrice;
     }
 
     @Data
@@ -61,5 +64,17 @@ public class BillDTO {
         private String description;
         @NotNull @Positive
         private BigDecimal amount;
+    }
+
+    @Data
+    public static class SetUtilitiesRequest {
+        // So dien cu (kWh)
+        private Double electricityOld;
+        // So dien moi (kWh)
+        private Double electricityNew;
+        // So nuoc cu (m3)
+        private Double waterOld;
+        // So nuoc moi (m3)
+        private Double waterNew;
     }
 }
