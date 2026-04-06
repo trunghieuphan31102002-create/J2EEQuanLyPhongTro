@@ -32,69 +32,42 @@ function MapPicker({
   const polygonLayerRef = useRef<L.Polygon | null>(null);
   const drawPointsRef = useRef<L.LatLng[]>([]);
   const drawMarkersRef = useRef<L.Marker[]>([]);
+  const cleanupRef = useRef<(() => void) | null>(null);
   const [search, setSearch] = useState('');
   const [searching, setSearching] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [manualLat, setManualLat] = useState(lat?.toString() ?? '');
   const [manualLng, setManualLng] = useState(lng?.toString() ?? '');
 
-  const [mapReady, setMapReady] = useState(false);
-
-  // Delay map init to let modal animation finish
+  // Init map — poll until container has real dimensions
   useEffect(() => {
-    const timer = setTimeout(() => setMapReady(true), 400);
-    return () => clearTimeout(timer);
-  }, []);
+    if (!mapRef.current || mapInstance.current) return;
+    let cancelled = false;
 
-  // Init map after ready
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || mapInstance.current) return;
-    const map = L.map(mapRef.current, { zoomControl: true }).setView(
-      [lat ?? 10.7769, lng ?? 106.7009], 14
-    );
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OSM',
-    }).addTo(map);
-    mapInstance.current = map;
+    const tryInit = () => {
+      if (cancelled || !mapRef.current) return;
+      const rect = mapRef.current.getBoundingClientRect();
+      if (rect.width < 50) {
+        // Container not visible yet, retry
+        requestAnimationFrame(tryInit);
+        return;
+      }
+      const map = L.map(mapRef.current, { zoomControl: true }).setView(
+        [lat ?? 10.7769, lng ?? 106.7009], 14
+      );
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OSM',
+      }).addTo(map);
+      mapInstance.current = map;
 
-    // Ensure correct size after modal fully rendered
-    map.invalidateSize();
-    setTimeout(() => map.invalidateSize(), 500);
-    const observer = new ResizeObserver(() => map.invalidateSize());
-    observer.observe(mapRef.current);
-    const cleanup = () => observer.disconnect();
+      // Keep size in sync
+      const observer = new ResizeObserver(() => map.invalidateSize());
+      observer.observe(mapRef.current!);
+      cleanupRef.current = () => observer.disconnect();
 
-    // Set initial marker
-    if (lat && lng) {
-      markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
-      markerRef.current.on('dragend', () => {
-        const pos = markerRef.current!.getLatLng();
-        onLatLngChange(pos.lat, pos.lng);
-        setManualLat(pos.lat.toFixed(6));
-        setManualLng(pos.lng.toFixed(6));
-      });
-    }
-
-    // Load existing polygon
-    if (polygon) {
-      try {
-        const geo = JSON.parse(polygon);
-        const coords = geo.coordinates?.[0]?.map((c: number[]) => [c[1], c[0]]) ?? [];
-        if (coords.length > 2) {
-          polygonLayerRef.current = L.polygon(coords, { color: '#E8622A', weight: 2, fillOpacity: 0.2 }).addTo(map);
-          map.fitBounds(polygonLayerRef.current.getBounds());
-        }
-      } catch { /* ignore bad json */ }
-    }
-
-    // Click to place marker
-    map.on('click', (e: L.LeafletMouseEvent) => {
-      if ((map as unknown as { _isDrawingPolygon?: boolean })._isDrawingPolygon) return;
-      const { lat: clat, lng: clng } = e.latlng;
-      if (markerRef.current) {
-        markerRef.current.setLatLng(e.latlng);
-      } else {
-        markerRef.current = L.marker(e.latlng, { draggable: true }).addTo(map);
+      // Set initial marker
+      if (lat && lng) {
+        markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
         markerRef.current.on('dragend', () => {
           const pos = markerRef.current!.getLatLng();
           onLatLngChange(pos.lat, pos.lng);
@@ -102,12 +75,43 @@ function MapPicker({
           setManualLng(pos.lng.toFixed(6));
         });
       }
-      onLatLngChange(clat, clng);
-      setManualLat(clat.toFixed(6));
-      setManualLng(clng.toFixed(6));
-    });
 
-    return () => { cleanup(); map.remove(); mapInstance.current = null; };
+      // Load existing polygon
+      if (polygon) {
+        try {
+          const geo = JSON.parse(polygon);
+          const coords = geo.coordinates?.[0]?.map((c: number[]) => [c[1], c[0]]) ?? [];
+          if (coords.length > 2) {
+            polygonLayerRef.current = L.polygon(coords, { color: '#E8622A', weight: 2, fillOpacity: 0.2 }).addTo(map);
+            map.fitBounds(polygonLayerRef.current.getBounds());
+          }
+        } catch { /* ignore bad json */ }
+      }
+
+      // Click to place marker
+      map.on('click', (e: L.LeafletMouseEvent) => {
+        if ((map as unknown as { _isDrawingPolygon?: boolean })._isDrawingPolygon) return;
+        const { lat: clat, lng: clng } = e.latlng;
+        if (markerRef.current) {
+          markerRef.current.setLatLng(e.latlng);
+        } else {
+          markerRef.current = L.marker(e.latlng, { draggable: true }).addTo(map);
+          markerRef.current.on('dragend', () => {
+            const pos = markerRef.current!.getLatLng();
+            onLatLngChange(pos.lat, pos.lng);
+            setManualLat(pos.lat.toFixed(6));
+            setManualLng(pos.lng.toFixed(6));
+          });
+        }
+        onLatLngChange(clat, clng);
+        setManualLat(clat.toFixed(6));
+        setManualLng(clng.toFixed(6));
+      });
+    };
+
+    requestAnimationFrame(tryInit);
+
+    return () => { cancelled = true; cleanupRef.current?.(); if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
