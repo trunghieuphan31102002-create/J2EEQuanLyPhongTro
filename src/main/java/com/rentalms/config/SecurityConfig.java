@@ -46,8 +46,11 @@ public class SecurityConfig {
                     .filter(s -> !s.isEmpty())
                     .toList();
             config.setAllowedOriginPatterns(origins);
-            config.setAllowCredentials(true);
+        } else {
+            // Dev mode: allow all origins
+            config.setAllowedOriginPatterns(List.of("*"));
         }
+        config.setAllowCredentials(true);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization", "Content-Disposition"));
