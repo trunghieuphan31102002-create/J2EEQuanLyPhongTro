@@ -38,9 +38,17 @@ function MapPicker({
   const [manualLat, setManualLat] = useState(lat?.toString() ?? '');
   const [manualLng, setManualLng] = useState(lng?.toString() ?? '');
 
-  // Init map
+  const [mapReady, setMapReady] = useState(false);
+
+  // Delay map init to let modal animation finish
   useEffect(() => {
-    if (!mapRef.current || mapInstance.current) return;
+    const timer = setTimeout(() => setMapReady(true), 400);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Init map after ready
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || mapInstance.current) return;
     const map = L.map(mapRef.current, { zoomControl: true }).setView(
       [lat ?? 10.7769, lng ?? 106.7009], 14
     );
@@ -48,6 +56,13 @@ function MapPicker({
       attribution: '© OSM',
     }).addTo(map);
     mapInstance.current = map;
+
+    // Ensure correct size after modal fully rendered
+    map.invalidateSize();
+    setTimeout(() => map.invalidateSize(), 500);
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(mapRef.current);
+    const cleanup = () => observer.disconnect();
 
     // Set initial marker
     if (lat && lng) {
@@ -92,7 +107,7 @@ function MapPicker({
       setManualLng(clng.toFixed(6));
     });
 
-    return () => { map.remove(); mapInstance.current = null; };
+    return () => { cleanup(); map.remove(); mapInstance.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -220,7 +235,7 @@ function MapPicker({
         </button>
       </div>
       {/* Map */}
-      <div ref={mapRef} style={{ height: 300, borderRadius: 8, border: '1px solid var(--border)' }} />
+      <div ref={mapRef} style={{ height: 300, width: '100%', borderRadius: 8, border: '1px solid var(--border)', position: 'relative', zIndex: 0 }} />
       {/* Manual lat/lng */}
       <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
         <input value={manualLat} onChange={(e) => setManualLat(e.target.value)} placeholder="Vĩ độ (lat)" style={{ flex: 1, fontSize: 12 }} />
