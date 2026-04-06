@@ -64,11 +64,7 @@ export default function ContractsSection() {
     <div className="section-card">
       <div className="section-head">
         <h3><i className="fa-solid fa-file-contract" style={{ color: 'var(--primary)' }} /> Hợp đồng</h3>
-        {canManage && (
-          <button className="btn btn-primary" onClick={() => toast.show('Vui lòng tạo hợp đồng qua phòng trống')}>
-            <i className="fa-solid fa-plus" /> Tạo hợp đồng
-          </button>
-        )}
+        {/* Hợp đồng được tự động tạo khi Owner duyệt yêu cầu thuê phòng */}
       </div>
 
       <div style={{ overflowX: 'auto' }}>

@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, useRef, type FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { createRoomInBuilding, listMyBuildings, listRoomsInBuilding } from '@/api/buildings';
+import { createRoomInBuilding, listMyBuildings, listRoomsInBuilding, updateRoomMedia } from '@/api/buildings';
+import { uploadImage, uploadVideo } from '@/api/upload';
 import { useToast } from '@/components/Toast';
 import { getErrorMessage } from '@/api/client';
 import { fmtNumber } from '@/lib/format';
@@ -37,6 +38,12 @@ export default function RoomsSection() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<RoomCreate & { buildingId: number }>({ buildingId: 0, roomNo: '', price: 0 });
   const [saving, setSaving] = useState(false);
+
+  // Upload media state
+  const [uploadModal, setUploadModal] = useState<RoomWithBuilding | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
 
   // MANAGER chi duoc xem phong cua building duoc assign, khong tao/sua/upload media
   const canEdit = user?.role === 'OWNER' || user?.role === 'ADMIN';
@@ -95,6 +102,31 @@ export default function RoomsSection() {
     }
   };
 
+  const handleUploadMedia = async () => {
+    if (!uploadModal) return;
+    const imgFile = imageRef.current?.files?.[0];
+    const vidFile = videoRef.current?.files?.[0];
+    if (!imgFile && !vidFile) {
+      toast.error('Vui lòng chọn ít nhất 1 ảnh hoặc video');
+      return;
+    }
+    setUploading(true);
+    try {
+      let imageUrl = uploadModal.imageUrl ?? null;
+      let videoUrl = uploadModal.videoUrl ?? null;
+      if (imgFile) imageUrl = await uploadImage(imgFile);
+      if (vidFile) videoUrl = await uploadVideo(vidFile);
+      await updateRoomMedia(uploadModal.buildingId!, uploadModal.id, imageUrl, videoUrl);
+      toast.success('Cập nhật ảnh/video thành công!');
+      setUploadModal(null);
+      refresh();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <>
       <div className="section-card">
@@ -146,13 +178,8 @@ export default function RoomsSection() {
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {canEdit && (
-                        <button className="btn btn-sm btn-outline" title="Upload ảnh/video">
+                        <button className="btn btn-sm btn-outline" title="Upload ảnh/video" onClick={() => setUploadModal(r)}>
                           <i className="fa-solid fa-photo-film" />
-                        </button>
-                      )}
-                      {canEdit && r.status === 'AVAILABLE' && (
-                        <button className="btn btn-sm btn-primary" onClick={() => toast.show('Tính năng đang phát triển')}>
-                          Tạo HĐ
                         </button>
                       )}
                     </div>
@@ -162,6 +189,44 @@ export default function RoomsSection() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Upload media modal */}
+      <div className={`modal-overlay${uploadModal ? ' show' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) setUploadModal(null); }}>
+        <div className="modal">
+          <div className="modal-head">
+            <h3>Upload ảnh/video — Phòng {uploadModal?.roomNo}</h3>
+            <button className="modal-close" onClick={() => setUploadModal(null)}><i className="fa-solid fa-xmark" /></button>
+          </div>
+          <div className="modal-body">
+            {uploadModal?.imageUrl && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-light)' }}>Ảnh hiện tại:</label>
+                <img src={uploadModal.imageUrl} alt="current" style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, marginTop: 4 }} />
+              </div>
+            )}
+            <div className="form-group">
+              <label>Chọn ảnh mới (JPG, PNG, WebP)</label>
+              <input ref={imageRef} type="file" accept="image/*" />
+            </div>
+            {uploadModal?.videoUrl && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-light)' }}>Video hiện tại:</label>
+                <video src={uploadModal.videoUrl} controls style={{ width: '100%', maxHeight: 120, borderRadius: 8, marginTop: 4 }} />
+              </div>
+            )}
+            <div className="form-group">
+              <label>Chọn video mới (MP4, WebM)</label>
+              <input ref={videoRef} type="file" accept="video/*" />
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-outline" onClick={() => setUploadModal(null)}>Hủy</button>
+            <button type="button" className="btn btn-primary" disabled={uploading} onClick={handleUploadMedia}>
+              {uploading ? 'Đang upload...' : 'Lưu ảnh/video'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Create modal */}

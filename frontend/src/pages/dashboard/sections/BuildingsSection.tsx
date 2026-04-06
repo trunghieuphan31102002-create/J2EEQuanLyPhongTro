@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   assignBuildingManager,
@@ -13,6 +14,7 @@ import type { Building, BuildingCreate, ManagerOption } from '@/types/building';
 export default function BuildingsSection() {
   const { user } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -140,7 +142,7 @@ export default function BuildingsSection() {
                     <span className={`badge ${b.publishStatus === 'PUBLIC' ? 'badge-green' : 'badge-gray'}`}>
                       {b.publishStatus === 'PUBLIC' ? 'Công khai' : 'Riêng tư'}
                     </span>
-                    <button className="btn btn-sm btn-outline">
+                    <button className="btn btn-sm btn-outline" onClick={() => navigate('/dashboard/rooms')}>
                       <i className="fa-solid fa-door-open" /> Xem phòng
                     </button>
                     {isOwner && (

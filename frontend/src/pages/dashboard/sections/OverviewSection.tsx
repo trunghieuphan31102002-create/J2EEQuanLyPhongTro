@@ -131,10 +131,21 @@ export default function OverviewSection() {
     setRecentTitle('Hợp đồng gần đây');
     setRecentTable(renderRecentContracts(contracts));
 
-    // Random month chart (matches original fallback)
-    const months = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
-    setChartBars(months.map((m) => ({ label: m, count: Math.floor(Math.random() * 80 + 20), color: '#E8622A' })));
-    setChartTitle('Thống kê tháng');
+    // Room status distribution (real data)
+    const allRooms = roomLists.flat();
+    const statusCounts: Record<string, number> = { AVAILABLE: 0, OCCUPIED: 0, RESERVED: 0, MAINTENANCE: 0 };
+    allRooms.forEach((rm) => {
+      if (statusCounts[rm.status] !== undefined) statusCounts[rm.status]++;
+      else statusCounts[rm.status] = (statusCounts[rm.status] ?? 0) + 1;
+    });
+    const statusColors: Record<string, string> = { AVAILABLE: '#22c55e', OCCUPIED: '#E8622A', RESERVED: '#3b82f6', MAINTENANCE: '#f59e0b' };
+    const statusLabels: Record<string, string> = { AVAILABLE: 'Còn trống', OCCUPIED: 'Đang thuê', RESERVED: 'Đã đặt', MAINTENANCE: 'Bảo trì' };
+    setChartBars(
+      Object.entries(statusCounts)
+        .filter(([s, c]) => c > 0 || s === 'AVAILABLE' || s === 'OCCUPIED')
+        .map(([s, c]) => ({ label: statusLabels[s] ?? s, count: c, color: statusColors[s] ?? '#888' }))
+    );
+    setChartTitle('Trạng thái phòng');
   };
 
   const loadAdmin = async () => {
