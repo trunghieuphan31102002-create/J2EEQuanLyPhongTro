@@ -25,6 +25,15 @@ export async function updateBuildingShape(id: number, geoJson: string): Promise<
   return data.data;
 }
 
+export async function updateBuildingDetails(
+  id: number,
+  body: Record<string, unknown>,
+): Promise<Building> {
+  const { data } = await apiClient.put<ApiResponse<Building>>(`/buildings/${id}/details`, body);
+  if (!data.data) throw new Error(data.message || 'Cập nhật thất bại');
+  return data.data;
+}
+
 export async function publishBuilding(id: number, status: 'PUBLIC' | 'PRIVATE'): Promise<Building> {
   const { data } = await apiClient.put<ApiResponse<Building>>(`/buildings/${id}/publish`, { status });
   if (!data.data) throw new Error(data.message || 'Cập nhật thất bại');

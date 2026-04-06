@@ -92,6 +92,14 @@ public class BuildingController {
         return ResponseEntity.ok(ApiResponse.ok("Cap nhat map thanh cong", updated));
     }
 
+    @PutMapping("/{id}/details")
+    @PreAuthorize("hasAnyRole('OWNER','ADMIN')")
+    public ResponseEntity<ApiResponse<Building>> updateDetails(
+            @PathVariable Long id, @RequestBody Map<String, Object> body) {
+        Building updated = buildingService.updateDetails(id, body, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.ok("Cap nhat thong tin thanh cong", updated));
+    }
+
     @PutMapping("/{id}/publish")
     @PreAuthorize("hasAnyRole('OWNER','ADMIN')")
     public ResponseEntity<ApiResponse<Building>> publish(

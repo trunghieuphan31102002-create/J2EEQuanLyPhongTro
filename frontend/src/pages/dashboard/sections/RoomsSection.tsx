@@ -38,6 +38,8 @@ export default function RoomsSection() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<RoomCreate & { buildingId: number }>({ buildingId: 0, roomNo: '', price: 0 });
   const [saving, setSaving] = useState(false);
+  const [createImgFile, setCreateImgFile] = useState<File | null>(null);
+  const [createImgPreview, setCreateImgPreview] = useState<string | null>(null);
 
   // Upload media state
   const [uploadModal, setUploadModal] = useState<RoomWithBuilding | null>(null);
@@ -79,6 +81,8 @@ export default function RoomsSection() {
       return;
     }
     setForm({ buildingId: buildings[0].id, roomNo: '', price: 0 });
+    setCreateImgFile(null);
+    setCreateImgPreview(null);
     setModalOpen(true);
   };
 
@@ -91,6 +95,9 @@ export default function RoomsSection() {
     setSaving(true);
     try {
       const { buildingId, ...payload } = form;
+      if (createImgFile) {
+        payload.imageUrl = await uploadImage(createImgFile);
+      }
       await createRoomInBuilding(buildingId, payload);
       toast.success('Thêm phòng thành công!');
       setModalOpen(false);
@@ -271,6 +278,14 @@ export default function RoomsSection() {
               <div className="form-group">
                 <label>Mô tả</label>
                 <textarea rows={2} value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>Ảnh phòng</label>
+                {createImgPreview && <img src={createImgPreview} alt="preview" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }} />}
+                <input type="file" accept="image/*" onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) { setCreateImgFile(f); setCreateImgPreview(URL.createObjectURL(f)); }
+                }} />
               </div>
             </div>
             <div className="modal-footer">

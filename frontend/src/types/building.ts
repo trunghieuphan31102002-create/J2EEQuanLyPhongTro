@@ -11,6 +11,9 @@ export interface Building {
   name: string;
   address: string;
   description: string | null;
+  imageUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
   shapeGeoJson: string | null;
   publishStatus: PublishStatus;
   ownerId?: number;
@@ -32,6 +35,9 @@ export interface BuildingCreate {
   name: string;
   address: string;
   description?: string;
+  imageUrl?: string;
+  latitude?: number;
+  longitude?: number;
   shapeGeoJson?: string;
   publishStatus?: PublishStatus;
 }

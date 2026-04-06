@@ -27,6 +27,13 @@ public class Building {
     @Column(length = 1000)
     private String description;
 
+    // Anh dai dien toa nha
+    private String imageUrl;
+
+    // Vi tri toa nha (lat/lng)
+    private Double latitude;
+    private Double longitude;
+
     // GeoJSON polygon cho map
     @Column(columnDefinition = "TEXT")
     private String shapeGeoJson;

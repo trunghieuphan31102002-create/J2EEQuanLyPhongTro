@@ -16,6 +16,9 @@ public class BuildingDTO {
         @NotBlank
         private String address;
         private String description;
+        private String imageUrl;
+        private Double latitude;
+        private Double longitude;
         private String shapeGeoJson;
         private String publishStatus = "PRIVATE";
     }

@@ -34,6 +34,9 @@ public class BuildingService {
                 .name(req.getName())
                 .address(req.getAddress())
                 .description(req.getDescription())
+                .imageUrl(req.getImageUrl())
+                .latitude(req.getLatitude())
+                .longitude(req.getLongitude())
                 .shapeGeoJson(req.getShapeGeoJson())
                 .publishStatus(req.getPublishStatus() != null ? req.getPublishStatus() : "PRIVATE")
                 .owner(owner)
@@ -101,6 +104,22 @@ public class BuildingService {
             auditService.log(ownerId, null, "ASSIGN_MANAGER", "Building", buildingId,
                     "Gan manager " + manager.getEmail() + " cho khu tro " + b.getName());
         }
+        return buildingRepo.save(b);
+    }
+
+    @Transactional
+    public Building updateDetails(Long buildingId, java.util.Map<String, Object> body, Long ownerId) {
+        Building b = findAndVerifyOwner(buildingId, ownerId);
+        if (body.containsKey("imageUrl")) b.setImageUrl((String) body.get("imageUrl"));
+        if (body.containsKey("latitude") && body.get("latitude") != null)
+            b.setLatitude(Double.valueOf(body.get("latitude").toString()));
+        if (body.containsKey("longitude") && body.get("longitude") != null)
+            b.setLongitude(Double.valueOf(body.get("longitude").toString()));
+        if (body.containsKey("shapeGeoJson")) b.setShapeGeoJson((String) body.get("shapeGeoJson"));
+        if (body.containsKey("name") && body.get("name") != null) b.setName(body.get("name").toString());
+        if (body.containsKey("address") && body.get("address") != null) b.setAddress(body.get("address").toString());
+        if (body.containsKey("description")) b.setDescription((String) body.get("description"));
+        auditService.log(ownerId, null, "UPDATE", "Building", buildingId, "Cap nhat thong tin khu tro");
         return buildingRepo.save(b);
     }
 
