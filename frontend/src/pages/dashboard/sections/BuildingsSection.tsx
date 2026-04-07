@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   assignBuildingManager,
   createBuilding,
+  deleteBuilding,
   listAvailableManagers,
   listMyBuildings,
   updateBuildingDetails,
@@ -338,6 +339,8 @@ export default function BuildingsSection() {
   const [pickedManagerId, setPickedManagerId] = useState<number | null>(null);
   const [assignSaving, setAssignSaving] = useState(false);
 
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
   const isOwner = user?.role === 'OWNER' || user?.role === 'ADMIN';
   const isManager = user?.role === 'MANAGER';
 
@@ -453,6 +456,20 @@ export default function BuildingsSection() {
     }
   };
 
+  const handleDeleteBuilding = async (b: Building) => {
+    if (!confirm(`Bạn có chắc muốn xóa tòa nhà "${b.name}"?\nTất cả phòng trong tòa nhà (không có hợp đồng) cũng sẽ bị xóa.\nHành động này không thể hoàn tác.`)) return;
+    setDeletingId(b.id);
+    try {
+      await deleteBuilding(b.id);
+      toast.success(`Đã xóa tòa nhà "${b.name}"`);
+      refresh();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <>
       <div className="section-card">
@@ -525,6 +542,15 @@ export default function BuildingsSection() {
                         </button>
                         <button className="btn btn-sm btn-outline" onClick={() => openAssign(b)}>
                           <i className="fa-solid fa-user-tie" /> {b.assignedManager ? 'Đổi QL' : 'Gán QL'}
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline"
+                          style={{ color: '#ef4444', borderColor: '#ef4444' }}
+                          disabled={deletingId === b.id}
+                          onClick={() => handleDeleteBuilding(b)}
+                          title="Xóa tòa nhà"
+                        >
+                          <i className="fa-solid fa-trash" /> {deletingId === b.id ? '...' : 'Xóa'}
                         </button>
                       </>
                     )}

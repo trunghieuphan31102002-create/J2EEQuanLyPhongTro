@@ -9,7 +9,9 @@ import com.rentalms.enums.UserRole;
 import com.rentalms.exception.BusinessException;
 import com.rentalms.exception.NotFoundException;
 import com.rentalms.repository.BuildingRepository;
+import com.rentalms.repository.ContractRepository;
 import com.rentalms.repository.RoomRepository;
+import com.rentalms.enums.ContractStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ public class BuildingService {
 
     private final BuildingRepository buildingRepo;
     private final RoomRepository roomRepo;
+    private final ContractRepository contractRepo;
     private final UserService userService;
     private final AuditService auditService;
     private final BuildingAccessService accessService;
@@ -216,6 +219,73 @@ public class BuildingService {
         auditService.log(ownerId, null, "UPDATE_MEDIA", "Room", roomId,
                 "Cap nhat anh/video phong " + room.getRoomNo());
         return roomRepo.save(room);
+    }
+
+    // === UPDATE Room ===
+    @Transactional
+    public Room updateRoom(Long buildingId, Long roomId, BuildingDTO.RoomCreateRequest req, Long ownerId) {
+        findAndVerifyOwner(buildingId, ownerId);
+        Room room = roomRepo.findById(roomId)
+                .orElseThrow(() -> new NotFoundException("Khong tim thay phong id: " + roomId));
+        if (!room.getBuilding().getId().equals(buildingId)) {
+            throw new BusinessException("Phong khong thuoc khu tro nay");
+        }
+        // Neu doi so phong, kiem tra trung
+        if (req.getRoomNo() != null && !req.getRoomNo().equals(room.getRoomNo())) {
+            if (roomRepo.existsByBuildingIdAndRoomNo(buildingId, req.getRoomNo())) {
+                throw new BusinessException("Ma phong da ton tai: " + req.getRoomNo());
+            }
+            room.setRoomNo(req.getRoomNo());
+        }
+        if (req.getPrice() != null) room.setPrice(req.getPrice());
+        if (req.getArea() != null) room.setArea(req.getArea());
+        if (req.getBeds() != null) room.setBeds(req.getBeds());
+        if (req.getAmenities() != null) room.setAmenities(req.getAmenities());
+        if (req.getDescription() != null) room.setDescription(req.getDescription());
+        if (req.getImageUrl() != null) room.setImageUrl(req.getImageUrl());
+        if (req.getVideoUrl() != null) room.setVideoUrl(req.getVideoUrl());
+        auditService.log(ownerId, null, "UPDATE", "Room", roomId,
+                "Cap nhat phong: " + room.getRoomNo());
+        return roomRepo.save(room);
+    }
+
+    // === DELETE Room ===
+    @Transactional
+    public void deleteRoom(Long buildingId, Long roomId, Long ownerId) {
+        findAndVerifyOwner(buildingId, ownerId);
+        Room room = roomRepo.findById(roomId)
+                .orElseThrow(() -> new NotFoundException("Khong tim thay phong id: " + roomId));
+        if (!room.getBuilding().getId().equals(buildingId)) {
+            throw new BusinessException("Phong khong thuoc khu tro nay");
+        }
+        // Khong cho xoa phong dang co hop dong active
+        boolean hasActive = contractRepo.findByRoomIdAndStatus(roomId, ContractStatus.ACTIVE).isPresent()
+                || contractRepo.findByRoomIdAndStatus(roomId, ContractStatus.PENDING).isPresent();
+        if (hasActive) {
+            throw new BusinessException("Khong the xoa phong dang co hop dong ACTIVE hoac PENDING");
+        }
+        auditService.log(ownerId, null, "DELETE", "Room", roomId,
+                "Xoa phong: " + room.getRoomNo());
+        roomRepo.delete(room);
+    }
+
+    // === DELETE Building ===
+    @Transactional
+    public void deleteBuilding(Long buildingId, Long ownerId) {
+        Building b = findAndVerifyOwner(buildingId, ownerId);
+        // Kiem tra co phong nao dang thue khong
+        List<Room> rooms = roomRepo.findByBuildingId(buildingId);
+        for (Room r : rooms) {
+            boolean hasActive = contractRepo.findByRoomIdAndStatus(r.getId(), ContractStatus.ACTIVE).isPresent()
+                    || contractRepo.findByRoomIdAndStatus(r.getId(), ContractStatus.PENDING).isPresent();
+            if (hasActive) {
+                throw new BusinessException("Khong the xoa toa nha vi phong " + r.getRoomNo()
+                        + " dang co hop dong ACTIVE hoac PENDING");
+            }
+        }
+        auditService.log(ownerId, null, "DELETE", "Building", buildingId,
+                "Xoa toa nha: " + b.getName());
+        buildingRepo.delete(b);
     }
 
     private Building findAndVerifyOwner(Long buildingId, Long ownerId) {

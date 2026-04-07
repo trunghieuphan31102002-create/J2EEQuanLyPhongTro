@@ -59,6 +59,10 @@ export async function assignBuildingManager(
   return data.data;
 }
 
+export async function deleteBuilding(id: number): Promise<void> {
+  await apiClient.delete(`/buildings/${id}`);
+}
+
 // === ROOMS ===
 
 export async function listRoomsInBuilding(buildingId: number): Promise<Room[]> {
@@ -75,6 +79,23 @@ export async function createRoomInBuilding(buildingId: number, payload: RoomCrea
 export async function bulkCreateRooms(buildingId: number, payload: BulkRoomRequest): Promise<Room[]> {
   const { data } = await apiClient.post<ApiResponse<Room[]>>(`/buildings/${buildingId}/rooms/bulk`, payload);
   return data.data ?? [];
+}
+
+export async function updateRoom(
+  buildingId: number,
+  roomId: number,
+  payload: Partial<RoomCreate>,
+): Promise<Room> {
+  const { data } = await apiClient.put<ApiResponse<Room>>(
+    `/buildings/${buildingId}/rooms/${roomId}`,
+    payload,
+  );
+  if (!data.data) throw new Error(data.message || 'Cập nhật phòng thất bại');
+  return data.data;
+}
+
+export async function deleteRoom(buildingId: number, roomId: number): Promise<void> {
+  await apiClient.delete(`/buildings/${buildingId}/rooms/${roomId}`);
 }
 
 export async function updateRoomMedia(

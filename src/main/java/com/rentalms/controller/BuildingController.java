@@ -108,6 +108,13 @@ public class BuildingController {
         return ResponseEntity.ok(ApiResponse.ok("Cap nhat trang thai thanh cong", updated));
     }
 
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('OWNER','ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deleteBuilding(@PathVariable Long id) {
+        buildingService.deleteBuilding(id, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.ok("Xoa toa nha thanh cong", null));
+    }
+
     // === ROOM endpoints ===
 
     @GetMapping("/{buildingId}/rooms")
@@ -137,6 +144,25 @@ public class BuildingController {
                 body.get("imageUrl"), body.get("videoUrl"),
                 currentUser.getId());
         return ResponseEntity.ok(ApiResponse.ok("Cap nhat anh/video thanh cong", room));
+    }
+
+    @PutMapping("/{buildingId}/rooms/{roomId}")
+    @PreAuthorize("hasAnyRole('OWNER','ADMIN')")
+    public ResponseEntity<ApiResponse<Room>> updateRoom(
+            @PathVariable Long buildingId,
+            @PathVariable Long roomId,
+            @RequestBody BuildingDTO.RoomCreateRequest req) {
+        Room room = buildingService.updateRoom(buildingId, roomId, req, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.ok("Cap nhat phong thanh cong", room));
+    }
+
+    @DeleteMapping("/{buildingId}/rooms/{roomId}")
+    @PreAuthorize("hasAnyRole('OWNER','ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deleteRoom(
+            @PathVariable Long buildingId,
+            @PathVariable Long roomId) {
+        buildingService.deleteRoom(buildingId, roomId, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.ok("Xoa phong thanh cong", null));
     }
 
     @PostMapping("/{buildingId}/rooms/bulk")

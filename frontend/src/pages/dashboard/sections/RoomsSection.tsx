@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, type FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { createRoomInBuilding, listMyBuildings, listRoomsInBuilding, updateRoomMedia } from '@/api/buildings';
+import { createRoomInBuilding, deleteRoom, listMyBuildings, listRoomsInBuilding, updateRoom, updateRoomMedia } from '@/api/buildings';
 import { uploadImage, uploadVideo } from '@/api/upload';
 import { useToast } from '@/components/Toast';
 import { getErrorMessage } from '@/api/client';
@@ -46,6 +46,16 @@ export default function RoomsSection() {
   const [uploading, setUploading] = useState(false);
   const imageRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
+
+  // Edit room state
+  const [editModal, setEditModal] = useState<RoomWithBuilding | null>(null);
+  const [editForm, setEditForm] = useState<RoomCreate & { buildingId: number }>({ buildingId: 0, roomNo: '', price: 0 });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editImgFile, setEditImgFile] = useState<File | null>(null);
+  const [editImgPreview, setEditImgPreview] = useState<string | null>(null);
+
+  // Delete state
+  const [deleting, setDeleting] = useState<number | null>(null);
 
   // MANAGER chi duoc xem phong cua building duoc assign, khong tao/sua/upload media
   const canEdit = user?.role === 'OWNER' || user?.role === 'ADMIN';
@@ -134,6 +144,62 @@ export default function RoomsSection() {
     }
   };
 
+  const openEditRoom = (r: RoomWithBuilding) => {
+    setEditModal(r);
+    setEditForm({
+      buildingId: r.buildingId!,
+      roomNo: r.roomNo,
+      price: r.price,
+      area: r.area ?? undefined,
+      beds: r.beds ?? undefined,
+      amenities: r.amenities ?? '',
+      description: r.description ?? '',
+    });
+    setEditImgFile(null);
+    setEditImgPreview(r.imageUrl ?? null);
+  };
+
+  const submitEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editModal) return;
+    setEditSaving(true);
+    try {
+      const payload: Partial<RoomCreate> = {
+        roomNo: editForm.roomNo,
+        price: editForm.price,
+        area: editForm.area,
+        beds: editForm.beds,
+        amenities: editForm.amenities,
+        description: editForm.description,
+      };
+      if (editImgFile) {
+        payload.imageUrl = await uploadImage(editImgFile);
+      }
+      await updateRoom(editModal.buildingId!, editModal.id, payload);
+      toast.success('Cập nhật phòng thành công!');
+      setEditModal(null);
+      refresh();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDelete = async (r: RoomWithBuilding) => {
+    if (!confirm(`Bạn có chắc muốn xóa phòng ${r.roomNo}? Hành động này không thể hoàn tác.`)) return;
+    setDeleting(r.id);
+    try {
+      await deleteRoom(r.buildingId!, r.id);
+      toast.success(`Đã xóa phòng ${r.roomNo}`);
+      refresh();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   return (
     <>
       <div className="section-card">
@@ -185,9 +251,23 @@ export default function RoomsSection() {
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {canEdit && (
-                        <button className="btn btn-sm btn-outline" title="Upload ảnh/video" onClick={() => setUploadModal(r)}>
-                          <i className="fa-solid fa-photo-film" />
-                        </button>
+                        <>
+                          <button className="btn btn-sm btn-outline" title="Sửa phòng" onClick={() => openEditRoom(r)}>
+                            <i className="fa-solid fa-pen" />
+                          </button>
+                          <button className="btn btn-sm btn-outline" title="Upload ảnh/video" onClick={() => setUploadModal(r)}>
+                            <i className="fa-solid fa-photo-film" />
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline"
+                            title="Xóa phòng"
+                            style={{ color: '#ef4444', borderColor: '#ef4444' }}
+                            disabled={deleting === r.id}
+                            onClick={() => handleDelete(r)}
+                          >
+                            <i className="fa-solid fa-trash" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -233,6 +313,62 @@ export default function RoomsSection() {
               {uploading ? 'Đang upload...' : 'Lưu ảnh/video'}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Edit room modal */}
+      <div className={`modal-overlay${editModal ? ' show' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) setEditModal(null); }}>
+        <div className="modal">
+          <div className="modal-head">
+            <h3>Sửa phòng {editModal?.roomNo}</h3>
+            <button className="modal-close" onClick={() => setEditModal(null)}><i className="fa-solid fa-xmark" /></button>
+          </div>
+          <form onSubmit={submitEdit}>
+            <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Số phòng *</label>
+                  <input value={editForm.roomNo} onChange={(e) => setEditForm({ ...editForm, roomNo: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label>Giá (đ/tháng) *</label>
+                  <input type="number" value={editForm.price || ''} onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) })} required />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Diện tích (m²)</label>
+                  <input type="number" value={editForm.area ?? ''} onChange={(e) => setEditForm({ ...editForm, area: e.target.value ? Number(e.target.value) : undefined })} />
+                </div>
+                <div className="form-group">
+                  <label>Số giường</label>
+                  <input type="number" value={editForm.beds ?? ''} onChange={(e) => setEditForm({ ...editForm, beds: e.target.value ? Number(e.target.value) : undefined })} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Tiện nghi</label>
+                <input value={editForm.amenities ?? ''} onChange={(e) => setEditForm({ ...editForm, amenities: e.target.value })} placeholder="Máy lạnh, Wifi, Nước nóng..." />
+              </div>
+              <div className="form-group">
+                <label>Mô tả</label>
+                <textarea rows={2} value={editForm.description ?? ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>Ảnh phòng</label>
+                {editImgPreview && <img src={editImgPreview} alt="preview" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }} />}
+                <input type="file" accept="image/*" onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) { setEditImgFile(f); setEditImgPreview(URL.createObjectURL(f)); }
+                }} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-outline" onClick={() => setEditModal(null)}>Hủy</button>
+              <button type="submit" className="btn btn-primary" disabled={editSaving}>
+                {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
