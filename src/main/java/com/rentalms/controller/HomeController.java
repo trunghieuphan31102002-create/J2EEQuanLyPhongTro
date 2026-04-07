@@ -13,7 +13,7 @@ public class HomeController {
         Map<String, Object> info = new LinkedHashMap<>();
         info.put("app", "RentalMS - He thong Quan ly Phong Tro");
         info.put("version", "1.0.0");
-        info.put("h2Console", "http://localhost:8080/h2-console (JDBC: jdbc:h2:mem:rentalms, user: sa)");
+        info.put("database", "MySQL - rentalms (localhost:3306)");
 
         Map<String, String> accounts = new LinkedHashMap<>();
         accounts.put("admin", "admin@rentalms.com / admin123");

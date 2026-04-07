@@ -12,7 +12,7 @@ public class RentalMSApplication {
         System.out.println("\n========================================");
         System.out.println("  RentalMS - He thong quan ly phong tro");
         System.out.println("  http://localhost:8080");
-        System.out.println("  H2 Console: http://localhost:8080/h2-console");
+        System.out.println("  Database  : MySQL - rentalms (localhost:3306)");
         System.out.println("  API Docs  : http://localhost:8080/api");
         System.out.println("========================================\n");
     }

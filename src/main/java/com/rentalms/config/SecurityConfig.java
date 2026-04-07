@@ -70,13 +70,12 @@ public class SecurityConfig {
                 .requestMatchers("/api/marketplace/**").permitAll()
                 .requestMatchers("/api/geolocate/**").permitAll()
                 .requestMatchers("/api/vnpay/return", "/api/vnpay/ipn").permitAll()
-                .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/uploads/**").permitAll()
                 .requestMatchers("/", "/error", "/favicon.ico").permitAll()
                 .anyRequest().authenticated()
             )
-            .headers(h -> h.frameOptions(f -> f.disable())) // cho H2 console
+            .headers(h -> h.frameOptions(f -> f.sameOrigin()))
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
