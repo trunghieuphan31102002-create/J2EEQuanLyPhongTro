@@ -120,7 +120,8 @@ function MapPicker({
     if (!search.trim()) return;
     setSearching(true);
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(search)}&limit=1`);
+      const query = search.match(/vietnam|việt nam|vn|hcm|hà nội|đà nẵng/i) ? search : `${search}, Vietnam`;
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=vn&accept-language=vi`);
       const data = await res.json();
       if (data.length > 0) {
         const { lat: slat, lon: slng } = data[0];
@@ -141,10 +142,10 @@ function MapPicker({
         setManualLat(nlat.toFixed(6));
         setManualLng(nlng.toFixed(6));
       } else {
-        alert('Không tìm thấy vị trí');
+        alert('Không tìm thấy vị trí. Thử thêm tên quận/thành phố (VD: "475A Điện Biên Phủ, Bình Thạnh")');
       }
     } catch {
-      alert('Lỗi tìm kiếm');
+      alert('Lỗi tìm kiếm. Kiểm tra kết nối mạng.');
     } finally {
       setSearching(false);
     }
