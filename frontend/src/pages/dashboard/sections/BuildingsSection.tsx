@@ -35,6 +35,7 @@ function MapPicker({
   const cleanupRef = useRef<(() => void) | null>(null);
   const [search, setSearch] = useState('');
   const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Array<{ display_name: string; lat: string; lon: string }>>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [manualLat, setManualLat] = useState(lat?.toString() ?? '');
   const [manualLng, setManualLng] = useState(lng?.toString() ?? '');
@@ -115,40 +116,59 @@ function MapPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Search location via Nominatim
+  // Search location via Nominatim — show results dropdown
   const handleSearch = async () => {
     if (!search.trim()) return;
     setSearching(true);
+    setSearchResults([]);
     try {
       const query = search.match(/vietnam|việt nam|vn|hcm|hà nội|đà nẵng/i) ? search : `${search}, Vietnam`;
       const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=vn&accept-language=vi`);
       const data = await res.json();
       if (data.length > 0) {
-        const { lat: slat, lon: slng } = data[0];
-        const nlat = parseFloat(slat), nlng = parseFloat(slng);
-        mapInstance.current?.setView([nlat, nlng], 16);
-        if (markerRef.current) {
-          markerRef.current.setLatLng([nlat, nlng]);
-        } else {
-          markerRef.current = L.marker([nlat, nlng], { draggable: true }).addTo(mapInstance.current!);
-          markerRef.current.on('dragend', () => {
-            const pos = markerRef.current!.getLatLng();
-            onLatLngChange(pos.lat, pos.lng);
-            setManualLat(pos.lat.toFixed(6));
-            setManualLng(pos.lng.toFixed(6));
-          });
-        }
-        onLatLngChange(nlat, nlng);
-        setManualLat(nlat.toFixed(6));
-        setManualLng(nlng.toFixed(6));
+        setSearchResults(data);
       } else {
-        alert('Không tìm thấy vị trí. Thử thêm tên quận/thành phố (VD: "475A Điện Biên Phủ, Bình Thạnh")');
+        // Fallback: try street name only
+        const parts = search.split(/[,\s]+/).filter(p => p.length > 2);
+        if (parts.length > 1) {
+          const fallback = parts.slice(-2).join(' ') + ', Ho Chi Minh City, Vietnam';
+          const res2 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallback)}&limit=5&countrycodes=vn&accept-language=vi`);
+          const data2 = await res2.json();
+          if (data2.length > 0) {
+            setSearchResults(data2);
+          } else {
+            alert('Không tìm thấy. Hãy click trực tiếp trên bản đồ hoặc nhập tọa độ.');
+          }
+        } else {
+          alert('Không tìm thấy. Hãy click trực tiếp trên bản đồ hoặc nhập tọa độ.');
+        }
       }
     } catch {
-      alert('Lỗi tìm kiếm. Kiểm tra kết nối mạng.');
+      alert('Lỗi tìm kiếm.');
     } finally {
       setSearching(false);
     }
+  };
+
+  // Select a search result
+  const selectResult = (r: { lat: string; lon: string; display_name: string }) => {
+    const nlat = parseFloat(r.lat), nlng = parseFloat(r.lon);
+    mapInstance.current?.setView([nlat, nlng], 17);
+    if (markerRef.current) {
+      markerRef.current.setLatLng([nlat, nlng]);
+    } else if (mapInstance.current) {
+      markerRef.current = L.marker([nlat, nlng], { draggable: true }).addTo(mapInstance.current);
+      markerRef.current.on('dragend', () => {
+        const pos = markerRef.current!.getLatLng();
+        onLatLngChange(pos.lat, pos.lng);
+        setManualLat(pos.lat.toFixed(6));
+        setManualLng(pos.lng.toFixed(6));
+      });
+    }
+    onLatLngChange(nlat, nlng);
+    setManualLat(nlat.toFixed(6));
+    setManualLng(nlng.toFixed(6));
+    setSearchResults([]);
   };
 
   // Manual lat/lng input
@@ -239,6 +259,23 @@ function MapPicker({
           <i className="fa-solid fa-search" /> {searching ? '...' : 'Tìm'}
         </button>
       </div>
+      {/* Search results dropdown */}
+      {searchResults.length > 0 && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, maxHeight: 150, overflowY: 'auto', background: 'var(--bg, #fff)' }}>
+          {searchResults.map((r, i) => (
+            <div
+              key={i}
+              onClick={() => selectResult(r)}
+              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--border)' }}
+              onMouseOver={(e) => (e.currentTarget.style.background = '#f0f0f0')}
+              onMouseOut={(e) => (e.currentTarget.style.background = '')}
+            >
+              <i className="fa-solid fa-location-dot" style={{ color: '#E8622A', marginRight: 6 }} />
+              {r.display_name}
+            </div>
+          ))}
+        </div>
+      )}
       {/* Map */}
       <div ref={mapRef} style={{ height: 300, width: '100%', borderRadius: 8, border: '1px solid var(--border)', position: 'relative', zIndex: 0 }} />
       {/* Manual lat/lng */}
