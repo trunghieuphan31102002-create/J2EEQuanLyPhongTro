@@ -139,7 +139,7 @@ export default function BillsSection() {
                 <button className="btn btn-sm btn-outline" onClick={() => openDetail(b.id)}>
                   <i className="fa-solid fa-eye" /> Chi tiết
                 </button>
-                {(b.status === 'UNPAID' || b.status === 'PARTIAL') && isTenant && (
+                {(b.status === 'UNPAID' || b.status === 'PARTIAL' || b.status === 'OVERDUE') && isTenant && (
                   <>
                     <button
                       className="btn btn-sm"
