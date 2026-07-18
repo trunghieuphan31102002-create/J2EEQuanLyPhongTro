@@ -1,0 +1,229 @@
+### ================================================
+### RentalMS API Tests - VSCode REST Client
+### Install extension: "humao.rest-client"
+### ================================================
+
+@baseUrl = http://localhost:8080
+@ownerToken = PASTE_TOKEN_HERE
+@tenantToken = PASTE_TOKEN_HERE
+
+### 1. Dang nhap Owner
+# @name loginOwner
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "owner@rentalms.com",
+  "password": "owner123"
+}
+
+###
+
+### 2. Dang nhap Tenant
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "tenant1@rentalms.com",
+  "password": "tenant123"
+}
+
+###
+
+### 3. Dang ky nguoi dung moi
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "newowner@test.com",
+  "password": "password123",
+  "fullName": "Chu Tro Moi",
+  "phone": "0909000000",
+  "role": "OWNER"
+}
+
+###
+
+### 4. Lay danh sach khu tro (dung owner token)
+GET {{baseUrl}}/api/buildings
+Authorization: Bearer {{ownerToken}}
+
+###
+
+### 5. Tao khu tro moi
+POST {{baseUrl}}/api/buildings
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "name": "Khu Tro Test Quan 1",
+  "address": "789 Nguyen Trai, Quan 1, TP.HCM",
+  "description": "Khu tro test tu API",
+  "publishStatus": "PUBLIC"
+}
+
+###
+
+### 6. Tao phong don le
+POST {{baseUrl}}/api/buildings/1/rooms
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "roomNo": "TEST-01",
+  "price": 3200000,
+  "area": 25.0,
+  "beds": 1,
+  "amenities": "Wifi, Dieu hoa, Tu lanh",
+  "description": "Phong test dep"
+}
+
+###
+
+### 7. Bulk create 5 phong
+POST {{baseUrl}}/api/buildings/1/rooms/bulk
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "pattern": "B-{i}",
+  "count": 5,
+  "startIndex": 1,
+  "price": 2800000,
+  "area": 22.0,
+  "beds": 1,
+  "amenities": "Wifi, Nha ve sinh rieng"
+}
+
+###
+
+### 8. Update GeoJSON polygon
+PUT {{baseUrl}}/api/buildings/1/shape
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "geoJson": "{\"type\":\"Polygon\",\"coordinates\":[[[106.69,10.77],[106.70,10.77],[106.70,10.78],[106.69,10.78],[106.69,10.77]]]}"
+}
+
+###
+
+### 9. Publish khu tro
+PUT {{baseUrl}}/api/buildings/1/publish
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "status": "PUBLIC"
+}
+
+###
+
+### 10. Tao hop dong
+POST {{baseUrl}}/api/contracts
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "roomId": 2,
+  "tenantId": 4,
+  "startDate": "2024-03-01",
+  "endDate": "2025-03-01",
+  "deposit": 6000000,
+  "monthlyRent": 3000000,
+  "rentCycle": "MONTHLY",
+  "policy": "Dong tien truoc ngay 5 moi thang"
+}
+
+###
+
+### 11. Xem danh sach hop dong (Owner)
+GET {{baseUrl}}/api/contracts
+Authorization: Bearer {{ownerToken}}
+
+###
+
+### 12. Xem hoa don (Tenant)
+GET {{baseUrl}}/api/bills
+Authorization: Bearer {{tenantToken}}
+
+###
+
+### 13. Thanh toan hoa don
+POST {{baseUrl}}/api/bills/1/pay
+Authorization: Bearer {{tenantToken}}
+Content-Type: application/json
+
+{
+  "amount": 3150000,
+  "method": "BANK_TRANSFER",
+  "referenceCode": "TF2024031001",
+  "note": "Thanh toan thang 3/2024"
+}
+
+###
+
+### 14. Them khoan phi vao hoa don
+POST {{baseUrl}}/api/bills/1/items
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "itemType": "MAINTENANCE",
+  "description": "Chi phi sua may lanh",
+  "amount": 500000
+}
+
+###
+
+### 15. Gui yeu cau bao tri
+POST {{baseUrl}}/api/maintenance
+Authorization: Bearer {{tenantToken}}
+Content-Type: application/json
+
+{
+  "roomId": 1,
+  "description": "May lanh bi hong, chay yeu",
+  "priority": "HIGH"
+}
+
+###
+
+### 16. Cap nhat trang thai bao tri
+PUT {{baseUrl}}/api/maintenance/1/status
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS",
+  "note": "Da lien he tho sua, du kien hoan thanh 24h"
+}
+
+###
+
+### 17. Tao invite token
+POST {{baseUrl}}/api/invites
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "buildingId": 1,
+  "permission": "VIEW",
+  "expiryDays": 7,
+  "maxUses": 10
+}
+
+###
+
+### 18. Kiem tra invite token (public - khong can auth)
+GET {{baseUrl}}/api/invites/validate/TOKEN_HERE
+
+###
+
+### 19. Tim kiem phong tren marketplace (public)
+GET {{baseUrl}}/api/marketplace?keyword=Binh Thanh
+
+###
+
+### 20. Xem thong tin tong quan API
+GET {{baseUrl}}/
